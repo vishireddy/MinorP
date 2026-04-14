@@ -206,33 +206,53 @@ elif st.session_state['role'] == "admin":
             st.warning("Nodes Offline. Sync Required.")
             
     with tab_eval:
-        st.write("Run the empirical test battery to compute Legal Accuracy and Amendment Recall.")
-        if st.button("▶️ Run Empirical Evaluation", use_container_width=True):
+        st.write("Run the 50-question empirical test battery comparing your Relationship-Aware RAG against a Naive Chatbot baseline.")
+        if st.button("▶️ Run Full Evaluation (50 Questions)", use_container_width=True, type="primary"):
             try:
                 progress_bar = st.progress(0)
                 status_text = st.empty()
-                
+
                 def update_progress(p, m):
                     progress_bar.progress(p)
                     status_text.text(m)
-                    
+
                 results = run_evaluation_suite(update_progress)
-                status_text.text("Ready.")
-                
-                st.subheader("Performance Metrics")
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Naive Accuracy (Baseline)", f"{results['metrics']['naive_accuracy']:.1f}%")
-                col2.metric("Aware Accuracy (Current)", f"{results['metrics']['aware_accuracy']:.1f}%", f"{results['metrics']['improvement']:.1f}%")
-                col3.metric("Hallucination Rate (Current)", f"{100 - results['metrics']['aware_accuracy']:.1f}%", f"{-results['metrics']['improvement']:.1f}%")
-                
-                st.subheader("Test Breakdown")
-                for res in results['breakdown']:
-                    icon_naive = "✅" if res['naive_pass'] else "❌"
-                    icon_aware = "✅" if res['aware_pass'] else "❌"
-                    st.markdown(f"**Query:** {res['query']}\n- Base Model: {icon_naive} | Aware Model: {icon_aware}")
+                status_text.text("✅ Evaluation Complete!")
+                m = results["metrics"]
+
+                st.subheader("📊 Overall Performance")
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("Naive Chatbot", f"{m['naive_accuracy']:.1f}%", help="Like asking ChatGPT/Gemini directly")
+                col2.metric("Aware RAG (Yours)", f"{m['aware_accuracy']:.1f}%", f"+{m['improvement']:.1f}%")
+                col3.metric("Hallucination Rate", f"{m['hallucination_rate']:.1f}%")
+                col4.metric("Total Questions", m["total_queries"])
+
+                st.subheader("🎯 Amendment-Trap Questions")
+                st.write("Questions specifically designed to trip up chatbots that don't track law amendments:")
+                col_a, col_b = st.columns(2)
+                col_a.metric("Naive Chatbot on Tricky Qs", f"{m['tricky_naive_accuracy']:.1f}%")
+                col_b.metric("Aware RAG on Tricky Qs", f"{m['tricky_aware_accuracy']:.1f}%", f"+{m['tricky_aware_accuracy'] - m['tricky_naive_accuracy']:.1f}%")
+
+                st.subheader("📂 Category Breakdown")
+                for cat, s in results["category_scores"].items():
+                    n_pct = (s["naive"] / s["total"]) * 100
+                    a_pct = (s["aware"] / s["total"]) * 100
+                    c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
+                    c1.write(f"**{cat}**")
+                    c2.metric("Naive", f"{n_pct:.0f}%")
+                    c3.metric("Aware", f"{a_pct:.0f}%", f"+{a_pct - n_pct:.0f}%")
+                    c4.write(f"{s['total']} Qs")
+
+                st.subheader("🔍 Question-by-Question Breakdown")
+                for res in results["breakdown"]:
+                    icon_n = "✅" if res["naive_pass"] else "❌"
+                    icon_a = "✅" if res["aware_pass"] else "❌"
+                    trap = "🎯 TRICKY" if res["tricky"] else ""
+                    st.markdown(f"**[{res['category']}] {trap}** {res['query']}\n- Chatbot: {icon_n} | RAG: {icon_a}")
                     st.divider()
             except Exception as e:
                 st.error(f"Evaluation Failed: {e}")
+
         
     with tab_manage:
         st.write("Upload and examine loaded policy structures.")
