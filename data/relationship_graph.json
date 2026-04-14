@@ -82,5 +82,11 @@
         "is_amendment": true,
         "amends": "Unknown",
         "amended_by": []
+    },
+    "constitution_of_india_may2024.pdf": {
+        "status": "Active",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": []
     }
 }

@@ -67,7 +67,7 @@ def create_relationship_aware_rag_chain():
         
         # 3. Create Custom Hybrid Ensemble (Reciprocal Rank Fusion)
         class HybridRRFRetriever:
-            def __init__(self, bm25, vector, weight_bm25=0.4, weight_vec=0.6):
+            def __init__(self, bm25, vector, weight_bm25=0.3, weight_vec=0.7):
                 self.bm25 = bm25
                 self.vector = vector
                 self.w_bm25 = weight_bm25
@@ -111,7 +111,8 @@ def create_relationship_aware_rag_chain():
         "If you see a document tagged as 'Inactive/Superseded' and another document tagged as 'Active' or 'amends',\n"
         "you MUST base your final recommendation on the Active amendment to prevent 'amendment blindness'.\n"
         "Explain the policy updates to the user (e.g., 'Initially, the rule was X, but it was amended to Y').\n"
-        "Always cite your sources, providing the exact Document Name and Page Number.\n\n"
+        "Always cite your sources, providing the exact Document Name.\n"
+        "If the Context is completely empty or completely irrelevant to the question, gracefully apologize and state that the information is not present in the Active Policy Database.\n\n"
         "Context:\n{context}"
     )
 

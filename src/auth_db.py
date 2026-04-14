@@ -75,3 +75,11 @@ def get_chat_history(username):
     results = c.fetchall()
     conn.close()
     return [{"role": row[0], "content": row[1]} for row in results]
+
+def purge_system_chats():
+    """Deletes all chat records from the database for privacy purging."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("DELETE FROM chats")
+    conn.commit()
+    conn.close()
