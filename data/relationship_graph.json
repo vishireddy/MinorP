@@ -1,0 +1,86 @@
+{
+    "base_it_act_2000.pdf": {
+        "status": "Inactive/Superseded in part",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": [
+            "amendment_it_act_2008.pdf"
+        ]
+    },
+    "base_it_rsp_2011.pdf": {
+        "status": "Inactive/Superseded in part",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": [
+            "amendment_it_act_2008.pdf"
+        ]
+    },
+    "base_consumer_protection_1986.pdf": {
+        "status": "Inactive/Superseded in part",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": [
+            "amendment_consumer_protection_2019.pdf"
+        ]
+    },
+    "amendment_consumer_protection_2019.pdf": {
+        "status": "Active",
+        "is_amendment": true,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "amendment_policy.pdf": {
+        "status": "Active",
+        "is_amendment": true,
+        "amends": "Right to Information Act, 2005",
+        "amended_by": []
+    },
+    "amendment_it_act_2008.pdf": {
+        "status": "Active",
+        "is_amendment": true,
+        "amends": "Information Technology Act, 2000",
+        "amended_by": []
+    },
+    "base_policy.pdf": {
+        "status": "Inactive/Superseded in part",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": [
+            "amendment_policy.pdf"
+        ]
+    },
+    "amendment_dpdp_2023.pdf": {
+        "status": "Active",
+        "is_amendment": true,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "base_rpact_1950.pdf": {
+        "status": "Inactive/Superseded in part",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": [
+            "amendment_rpact_1989.pdf",
+            "amendment_rpact_1988.pdf",
+            "amendment_rpact_1951.pdf"
+        ]
+    },
+    "amendment_rpact_1989.pdf": {
+        "status": "Active",
+        "is_amendment": true,
+        "amends": "Representation of the People Act",
+        "amended_by": []
+    },
+    "amendment_rpact_1988.pdf": {
+        "status": "Active",
+        "is_amendment": true,
+        "amends": "Representation of the People Act, 1950 and the Representation of the People Act, 1951",
+        "amended_by": []
+    },
+    "amendment_rpact_1951.pdf": {
+        "status": "Active",
+        "is_amendment": true,
+        "amends": "Unknown",
+        "amended_by": []
+    }
+}

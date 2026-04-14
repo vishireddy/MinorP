@@ -1,0 +1,164 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+% The preceding line is only needed to identify funding in the first footnote. If that is unneeded, please comment it out.
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{Relationship-Aware RAG-Based GenAI for\\ E-Governance Policy Retrieval and Responses}
+
+\author{\IEEEauthorblockN{1\textsuperscript{st} Pathigari Vishwak Reddy}
+\IEEEauthorblockA{\textit{Department of CSE} \\
+\textit{B.V.Raju Institute of Technology}\\
+Narsapur, Medak, India \\
+24211a05ec@bvrit.ac.in}
+\and
+\IEEEauthorblockN{2\textsuperscript{nd} Pranathi Chalamalasetti}
+\IEEEauthorblockA{\textit{Department of CSE} \\
+\textit{B.V.Raju Institute of Technology}\\
+Narsapur, Medak, India \\
+24211a05fc@bvrit.ac.in}
+\and
+\IEEEauthorblockN{3\textsuperscript{rd} Pasulavadi Harini}
+\IEEEauthorblockA{\textit{Department of CSE} \\
+\textit{B.V.Raju Institute of Technology}\\
+Narsapur, Medak, India \\
+25215a0ea@bvrit.ac.in}
+\and
+\IEEEauthorblockN{4\textsuperscript{th} L. Pallavi}
+\IEEEauthorblockA{\textit{Assistant Professor, Dept of CSE} \\
+\textit{B.V.Raju Institute of Technology}\\
+Narsapur, Medak, India \\
+pallavi503@gmail.com}
+\and
+\IEEEauthorblockN{5\textsuperscript{th} Perabathini Varshini}
+\IEEEauthorblockA{\textit{Department of CSE} \\
+\textit{B.V.Raju Institute of Technology}\\
+Narsapur, Medak, India \\
+24211a05ep@bvrit.ac.in}
+}
+
+\maketitle
+
+\begin{abstract}
+The government policies are living documents that are subject to change. Keyword-based searching and traditional RAG approaches will not work in connecting bits and pieces within the document, which includes amendments, references, previous mentions, and others. In consequence, one searching for some policy information can get outdated information and not see the whole picture. This creates a higher chance for mistakes to happen in AI-supported applications used by the citizens.
+
+This project proposes a Relationship-Aware RAG-based Generative AI framework. It models clear relationships between policy documents, including version history, amendment chains, and cross-references. Instead of fetching independent text chunks, the system builds a structured relationship graph that links original policies with their updates and related sections. During query processing, the retrieval module focuses on legally valid versions and adds context from connected documents before sending the information to the Large Language Model (LLM).
+
+By combining relationship-aware retrieval methods, the proposed framework greatly improves policy correctness, contextual completeness, and response reliability. This method lowers the risk of misinformation and boosts trust in AI-driven e-governance systems. It ensures that citizens get legally valid, up-to-date, and contextually consistent policy guidance.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Retrieval-Augmented Generation, Generative AI, E-Governance, Policy Retrieval, Metadata, Relationship-Aware Retrieval
+\end{IEEEkeywords}
+
+\section{Introduction}
+Systems of e-governance enhance transparency, accessibility, and efficiency by bringing government activities online. But policy documents are complicated, highly dynamic, and interrelated due to the process of amendment and referencing. As a result, it is challenging for people to find relevant documents since keyword or similar-based retrieval techniques cannot take into account such relationships.
+
+AI developments have led to the development of RAG systems, which combine language models with external sources of knowledge to give more precise answers. However, many RAG systems overlook document relationships, which are important in the context of policy-making. This study seeks to develop a relationship-based RAG system that incorporates semantic search alongside structured metadata on policy relationships.
+
+\subsection{Background}
+As governance continues to evolve digitally, a plethora of governmental policies and documents have become available online, and AI technology plays a significant role in facilitating efficient access. Unfortunately, conventional search engines and even advanced AI algorithms find it difficult to decode intricate legal constructs since policies may undergo frequent changes through updates and references, thus resulting in misinterpretation.
+
+While many current approaches utilize keyword-based or semantic similarity approaches, they often fail to retrieve up-to-date and complete information in areas where it is particularly crucial, such as law. While the RAG approach has been shown to increase the accuracy of the retrieved data, it does not account for connections between documents. This research aims to solve the problem by developing an AI system capable of comprehending document relationships and legal validity.
+
+\subsection{Objective}
+The primary aim of this project is to build a RAG (Relationships-aware Retrieval Augmented Generation) model capable of effectively retrieving policies related to e-governance. The major difference from existing models includes consideration of various relations such as amendments within documents and cross-referencing. This will allow selecting the newest and legally effective policies in the process of retrieval with the help of knowledge graphs.
+
+Another feature of this project is a reduction of AI hallucinations by generation of responses grounded in verified data.
+
+\subsection{Scope}
+The main goal of this research is creating a system for searching and interpreting policy documents utilizing AI-based technologies. The system implements RAG technology to process structured and unstructured data sets, ingest and embed documents, search information employing hybrid approaches, create mappings, and provide context-aware answers, including policy references and amendments.
+
+Currently, the scope of the system is limited to processing textual documents and basic legal interpretation, but the architecture of the system makes its further development scalable. Therefore, in the future, the system can be implemented in other spheres and enhanced with live updates and multilingual capabilities.
+
+\section{Literature Survey}
+The classical methods of information retrieval that utilize approaches like TF-IDF and Boolean lack capability to retrieve semantically rich results due to their dependence on keyword matching. This poses a serious problem in case of e-governance where there are many interdependencies among policies in terms of amendments and references. Semantic information retrieval models using transformer models like BERT have been proposed to overcome this challenge by identifying the user's intent. However, such models lack capability to detect the relationship between two policies and their legality.
+
+RAG is a remarkable system that leverages information retrieval techniques and large language models for response generation. It increases the precision of its outputs through the use of external documents. Unfortunately, conventional RAG methods retrieve documents independently, without considering the inter-document dependencies. Consequently, context may become fractured, resulting in outdated or inconsistent responses, particularly when dealing with specialized areas such as policy analysis.
+
+Nevertheless, there are also certain obstacles that remain even when applying this method. Despite all improvements made in the field of semantic search algorithms and Retrieval-Augmented Generation (RAG), there is no approach that creates an integral system of interaction analysis between documents based on their metadata. Almost all approaches either improve retrieval performance or generate high-quality texts, but rarely both.
+
+One of the spheres where interaction analysis between documents is highly necessary is e-governance. It is important to understand how one document impacts another or how several documents are interconnected in order to provide the most relevant data. This study aims to fill the gap by combining metadata-based retrieval and RAG to enable the use of document interactions and provide highly relevant answers.
+
+Another crucial consideration regarding policy systems involves managing versions and cross-referencing. Policies undergo changes, so it is crucial to determine which version of the policies is up-to-date and therefore valid from a legal perspective. Methods such as version tagging and temporal referencing may prove useful in maintaining the history of documents, and using graph structure will help link the amendments. Moreover, it is important to eliminate hallucinations within LLMs, which can be achieved through higher-quality data retrieval and proper context provision.
+
+\sectionsection{Existing Work}
+The growing trend towards digitalization of governance has spurred innovation and the development of numerous information retrieval systems to make it easier to get access to governmental legislation documents. The majority of conventional search engines operate under the principle of retrieval based on keywords. Such an approach is highly effective for straightforward searches but may result in inadequate understanding of user intent and its contextual meaning. Semantic search, which has become possible due to Artificial Intelligence, tries to overcome such obstacles.
+
+While it uses embedding models that help find a more relevant answer based on the meaning of a user request, semantic search still has its drawbacks. Its primary limitation is that it only operates with similarities without considering relations between documents. The most recent innovation that tries to solve that problem is the RAG system. It is based on retrieval-augmented generation that allows the creation of natural human responses from generative models using external knowledge sources.
+
+Even though RAG decreases the number of errors made by language models, it suffers from a lack of versioning and document dependencies. However, in the domain of laws and e-governance, the connections between policies tend to be based on modifications, citations, and hierarchy levels. Current RAG systems fail to capture such dependencies since they only consider documents as discrete chunks, regardless of their interrelations. Consequently, such a solution can yield old or partial data, especially when modifications are expressed indirectly and do not copy any original parts.
+
+Hence, although there has been significant progress in search and artificial intelligence capabilities, there is still no method capable of performing relationship-aware searches. In light of these facts, the new solution should integrate semantic analysis with document structure awareness.
+
+\section{Problem Statement}
+Existing systems using AI for e-governance face difficulties in handling policy changes and relationships between various documents. Often, policies are changed through amendments that make reference to previous versions without mentioning their contents directly. Both regular search engines and RAG models cannot understand the links between different versions of the same policy, which leads to retrieving the information that is outdated or even illegal.
+
+The problem with existing systems is also in their inability to track cross-referencing chains. Policies rely on numerous sections and other acts, but most of the current tools treat them as separate entities, which results in loss of important data about connections between different parts of the document. Lastly, the lack of ability to understand document relationships raises the risk of generating hallucinations by AI. In addition, without tracking different versions of documents and their connections, it is impossible to provide reliable and consistent answers.
+
+\section{Proposed System}
+The system under discussion proposes a novel RAG model with Relationship-awareness enabled via metadata that will ensure improved accuracy and relevance of e-governance policy information retrieval. In contrast to the existing solutions relying on graph databases for relationship management, this system will leverage structured metadata for identifying connections such as documents' status, amendments, and referencing.
+
+First, a pipeline for documents ingestion will be deployed, which will gather raw policies and transform them into text. Then, they will be split into chunks and encoded into vector embeddings for efficient semantic retrieval. In parallel, language models will extract information about documents such as whether it is an amendment to a certain policy, which policy does it amend and whether the document was superseded. Metadata about each document will be structured in JSON format for fast lookup and relationship identification.
+
+Query processing will involve both dense and sparse search mechanisms – semantic retrieval based on the similarity between document embeddings and keywords in the question. Once the retrieval is done, the system will leverage metadata relationship mapping and retrieve all necessary documents which were not yet found due to being amendments or referencing other documents.
+
+Before generating the output response, context tagging is performed through the use of metadata tags like ``Active,'' ``Inactive,'' and ``Superseded.'' Through this mechanism, the language model is guided to focus on up-to-date information and ignore any stale information in the process of producing the response. The context tagged input is passed through the generative language model, resulting in a coherent response from the system.
+
+The described system provides an efficient means to achieve relationship-aware retrieval by eliminating unnecessary complexities associated with graph-based approaches to address common problems such as amendment blindness, insufficient context retrieval, and AI hallucinations.
+
+\section{System Architecture}
+
+% Uncomment and add your graph image here!
+% \begin{figure}[htbp]
+% \centerline{\includegraphics[width=0.45\textwidth]{architecture.png}}
+% \caption{Relationship-Aware RAG Architecture for Policy Retrieval}
+% \label{fig:architecture}
+% \end{figure}
+
+Data Ingestion involves extracting the policies from the given texts, breaking them down into smaller chunks, and analyzing how they interrelate by identifying references, amendments, and other relationships between them. The identified relationships will be saved in the form of metadata, whereas the text will be converted into embeddings in a vector database.
+
+The Retrieval stage implies converting the user's request into embeddings and conducting semantic analysis in order to retrieve relevant information. Metadata will be used to expand the network of relationships to identify documents that matter to the user. The collected data will be grouped through the context aggregation technique.
+
+Finally, on the Generation stage, the aggregated context will be given to the language model, which will provide an answer and source references.
+
+\section{Methodology}
+The proposed system adopts a straightforward methodology for providing retrieval of policy documents that considers their interrelationships. This process consists of three parts, namely data processing, retrieval, and response generation.
+
+During data processing, policy documents are collected and converted to text. Then, the text is divided into smaller fragments to optimize the process of processing. At the same time, relationships such as amendments, references, and dependencies are extracted as metadata. Every fragment gets converted into embeddings and is added to a vector database along with its metadata.
+
+At the query stage, a user's question is translated into embeddings. The system conducts semantic search by evaluating similarity between the query and embeddings of documents. To increase the completeness of information retrieval, the system utilizes the metadata to expand the relationships.
+
+As a result, at the response stage, the system aggregates retrieved fragments into a common context. The aggregated context is passed to the language model that generates a comprehensive response and cites sources appropriately.
+
+\section{Conclusion}
+The proposed project involves implementing a metadata-based Relationship-Aware Retrieval-Augmented Generation (RAG) that aims at resolving significant challenges faced when retrieving policies in e-governance platforms, including outdated information, dead links, and hallucinations in AI. These challenges are solved through the use of metadata to keep track of the relationships between various documents.
+
+Unlike existing solutions that require elaborate graph-based approaches, this project leverages light-weighted JSON-based metadata. Moreover, the system implements a hybrid semantic-retrieval approach that combines semantic and keyword-based search techniques.
+
+The project ensures that only updated documents with appropriate context tagging (active/superseded) are used to ensure that generated responses are reliable. The system functions as an expert by considering the relationship between documents and returning accurate and contextually relevant answers.
+
+In general, this project provides a scalable and feasible solution to the e-governance community with regard to policy information retrieval by ensuring accuracy, freshness, and context awareness.
+
+\begin{thebibliography}{00}
+\bibitem{b1} A. Maharjan and U. Yadav., ``Chunking, Retrieval, and Re-ranking: RAG for Policy Document QA,'' arXiv preprint, 2026.
+\bibitem{b2} G. Papageorgiou et al., ``Hybrid Multi-Agent GraphRAG for E-Government'', Applied Sciences, 2025.
+\bibitem{b3} N. Pipitone and G. H. Alami, ``LegalBench-RAG,'' arXiv preprint, 2024.
+\bibitem{b4} D. Edge et al., ``From Local to Global: A Graph RAG Approach'', Microsoft Research, 2024.
+\bibitem{b5} Y. Gao et al., ``Retrieval-Augmented Generation for Large Language Models: A Survey'', arXiv, 2023.
+\bibitem{b6} J. Savelka et al., ``Explaining Legal Concepts with Large Language Models,'' AI and Law, 2023.
+\bibitem{b7} J. Huang et al., ``A Review of Knowledge Graphs in the Legal Domain'', AI and Law, 2022.
+\bibitem{b8} I. Chalkidis et al., ``Regulatory Compliance through Doc2Doc Information Retrieval,'' arXiv, 2021.
+\bibitem{b9} P. Lewis et al., ``Retrieval-Augmented Generation for Knowledge Intensive NLP Tasks,'' NeurIPS, 2020.
+\bibitem{b10} J. Savelka et al., ``Sentence-Level Selection of Relevant Statutory Provisions,'' ICAIL Conference, 2017.
+\end{thebibliography}
+
+\end{document}
