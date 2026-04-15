@@ -88,5 +88,147 @@
         "is_amendment": false,
         "amends": "Unknown",
         "amended_by": []
+    },
+    "amendment_rti_2019.pdf": {
+        "status": "Active",
+        "is_amendment": true,
+        "amends": "Right to Information Act, 2005",
+        "amended_by": []
+    },
+    "base_india_con_act_1872.pdf": {
+        "status": "Inactive/Superseded in part",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": [
+            "amendment_it_act_2008.pdf"
+        ]
+    },
+    "amendment_bsa_2023.pdf": {
+        "status": "Active",
+        "is_amendment": true,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "base_ib_2016.pdf": {
+        "status": "Active",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "base_forest_rights_act_2006.pdf": {
+        "status": "Inactive/Superseded in part",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": [
+            "amendment_it_act_2008.pdf"
+        ]
+    },
+    "base_tpa_1882.pdf": {
+        "status": "Active",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "base_ccp1973.pdf": {
+        "status": "Active",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "base_sebi_1992.pdf": {
+        "status": "Active",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "base_iea_1872.pdf": {
+        "status": "Active",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "base_rbi_1934.pdf": {
+        "status": "Active",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "base_wlpa_1972.pdf": {
+        "status": "Active",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "base_competition_act_2002.pdf": {
+        "status": "Inactive/Superseded in part",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": [
+            "amendment_it_act_2008.pdf"
+        ]
+    },
+    "base_rti_2005.pdf": {
+        "status": "Inactive/Superseded in part",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": [
+            "amendment_rti_2019.pdf"
+        ]
+    },
+    "base_constitution_of_india_may2024.pdf": {
+        "status": "Active",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "base_sc_st_1989.pdf": {
+        "status": "Active",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "amendment_bnss_2023.pdf": {
+        "status": "Active",
+        "is_amendment": true,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "base_mva_1988.pdf": {
+        "status": "Active",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "base_arms_act_1959.pdf": {
+        "status": "Inactive/Superseded in part",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": [
+            "amendment_it_act_2008.pdf"
+        ]
+    },
+    "base_trai_1997.pdf": {
+        "status": "Active",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "base_fema_1999.pdf": {
+        "status": "Active",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "base_pmla_2002.pdf": {
+        "status": "Active",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "base_rte2009.pdf": {
+        "status": "Active",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": []
     }
 }
