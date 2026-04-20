@@ -46,7 +46,7 @@ def create_relationship_aware_rag_chain():
     vector_retriever = vectorstore.as_retriever(
         search_type="similarity",
         search_kwargs={
-            "k": 6 # Fetch Top 6 chunks to prevent small-model hallucination
+            "k": 8  # Fetch Top 8 chunks for better recall across large document sets
         }
     )
     
@@ -63,7 +63,7 @@ def create_relationship_aware_rag_chain():
             bm25_docs.append(Document(page_content=doc_text, metadata=meta))
             
         bm25_retriever = BM25Retriever.from_documents(bm25_docs)
-        bm25_retriever.k = 6
+        bm25_retriever.k = 8
         
         # 3. Create Custom Hybrid Ensemble (Reciprocal Rank Fusion)
         class HybridRRFRetriever:
@@ -93,7 +93,7 @@ def create_relationship_aware_rag_chain():
                     
                 # Sort by highest RRF score
                 top_contents = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
-                return [doc_map[c] for c in top_contents[:6]]
+                return [doc_map[c] for c in top_contents[:8]]
                 
         retriever = HybridRRFRetriever(bm25_retriever, vector_retriever)
     else:
@@ -143,6 +143,7 @@ def create_relationship_aware_rag_chain():
             # --- RELATIONSHIP-AWARE CONTEXT INJECTION FLAG ---
             import json, os
             graph_path = "data/relationship_graph.json"
+            graph = {}  # Initialize empty graph — avoids NameError if file missing
             if os.path.exists(graph_path):
                 try:
                     with open(graph_path, "r") as f:

@@ -2,7 +2,7 @@ import streamlit as st
 import os
 from dotenv import load_dotenv
 from src.auth_db import init_db, register_user, verify_user, save_chat, get_chat_history, purge_system_chats
-from src.evaluate import run_evaluation_suite
+from src.evaluate import run_evaluation_suite, run_ragas_evaluation
 from src.ingestion import load_and_chunk_pdfs
 from src.metadata_tagger import enrich_metadata
 from src.retrieval_engine import get_vectorstore, create_relationship_aware_rag_chain
@@ -206,7 +206,15 @@ elif st.session_state['role'] == "admin":
             st.warning("Nodes Offline. Sync Required.")
             
     with tab_eval:
-        st.write("Run the 50-question empirical test battery comparing your Relationship-Aware RAG against a Naive Chatbot baseline.")
+        st.write("Run the 50-question empirical test battery comparing three modes: **Naive LLM** (ChatGPT-style) vs **Naive RAG** (basic retrieval) vs **Aware RAG** (yours).")
+
+        # Sync warning
+        raw_count = len([f for f in os.listdir("data/raw") if f.endswith(".pdf")]) if os.path.exists("data/raw") else 0
+        if raw_count > 0 and not os.path.exists("data/chroma_db"):
+            st.warning("⚠️ Vector database not found. Run System Sync before evaluating.")
+        elif raw_count > 0:
+            st.info(f"📦 {raw_count} PDFs in raw storage. If you recently added files, run System Sync first to index them.")
+
         if st.button("▶️ Run Full Evaluation (50 Questions)", use_container_width=True, type="primary"):
             try:
                 progress_bar = st.progress(0)
@@ -220,40 +228,168 @@ elif st.session_state['role'] == "admin":
                 status_text.text("✅ Evaluation Complete!")
                 m = results["metrics"]
 
-                st.subheader("📊 Overall Performance")
+                st.markdown("---")
+                st.subheader("📊 Overall Performance  *(Pass = Judge Score ≥ 6/10)*")
                 col1, col2, col3, col4 = st.columns(4)
-                col1.metric("Naive Chatbot", f"{m['naive_accuracy']:.1f}%", help="Like asking ChatGPT/Gemini directly")
-                col2.metric("Aware RAG (Yours)", f"{m['aware_accuracy']:.1f}%", f"+{m['improvement']:.1f}%")
-                col3.metric("Hallucination Rate", f"{m['hallucination_rate']:.1f}%")
+                col1.metric(
+                    "🤖 Gemma2-9b (Google)",
+                    f"{m['naive_llm_accuracy']:.1f}%",
+                    help="Google's Gemma2-9b via Groq — no document retrieval, pure training knowledge"
+                )
+                col2.metric(
+                    "📄 Mixtral-8x7b (Basic RAG)",
+                    f"{m['naive_rag_accuracy']:.1f}%",
+                    delta=f"{m['naive_rag_accuracy'] - m['naive_llm_accuracy']:+.1f}% vs Gemma2",
+                    help="Mistral Mixtral retrieves documents but ignores amendment relationships"
+                )
+                col3.metric(
+                    "⚖️ LLaMA3 Aware RAG (Ours)",
+                    f"{m['aware_accuracy']:.1f}%",
+                    delta=f"{m['rag_improvement_over_llm']:+.1f}% vs Gemma2",
+                    help="Meta LLaMA3.1 with relationship-aware retrieval and amendment injection"
+                )
                 col4.metric("Total Questions", m["total_queries"])
 
-                st.subheader("🎯 Amendment-Trap Questions")
-                st.write("Questions specifically designed to trip up chatbots that don't track law amendments:")
-                col_a, col_b = st.columns(2)
-                col_a.metric("Naive Chatbot on Tricky Qs", f"{m['tricky_naive_accuracy']:.1f}%")
-                col_b.metric("Aware RAG on Tricky Qs", f"{m['tricky_aware_accuracy']:.1f}%", f"+{m['tricky_aware_accuracy'] - m['tricky_naive_accuracy']:.1f}%")
+                st.markdown("#### 🏅 Average Judge Score  *(out of 10)*")
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Gemma2-9b", f"{m['naive_llm_avg_score']:.2f}/10")
+                c2.metric("Mixtral Basic RAG", f"{m['naive_rag_avg_score']:.2f}/10",
+                          delta=f"{m['naive_rag_avg_score'] - m['naive_llm_avg_score']:+.2f}")
+                c3.metric("LLaMA3 Aware RAG", f"{m['aware_avg_score']:.2f}/10",
+                          delta=f"{m['aware_avg_score'] - m['naive_llm_avg_score']:+.2f}")
 
+                st.markdown("---")
+                st.subheader("🎯 Amendment-Trap Questions")
+                st.caption("Questions specifically designed to expose chatbots that don't track law amendments")
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Gemma2-9b", f"{m['tricky_naive_llm_accuracy']:.1f}%")
+                c2.metric("Mixtral RAG", f"{m['tricky_naive_rag_accuracy']:.1f}%",
+                          delta=f"{m['tricky_naive_rag_accuracy'] - m['tricky_naive_llm_accuracy']:+.1f}%")
+                c3.metric("Aware RAG", f"{m['tricky_aware_accuracy']:.1f}%",
+                          delta=f"{m['tricky_aware_accuracy'] - m['tricky_naive_llm_accuracy']:+.1f}%")
+
+                st.markdown("---")
                 st.subheader("📂 Category Breakdown")
                 for cat, s in results["category_scores"].items():
-                    n_pct = (s["naive"] / s["total"]) * 100
-                    a_pct = (s["aware"] / s["total"]) * 100
-                    c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
+                    t = s["total"]
+                    nl = s["naive_llm_pass"] / t * 100
+                    nr = s["naive_rag_pass"] / t * 100
+                    aw = s["aware_pass"] / t * 100
+                    c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1, 1])
                     c1.write(f"**{cat}**")
-                    c2.metric("Naive", f"{n_pct:.0f}%")
-                    c3.metric("Aware", f"{a_pct:.0f}%", f"+{a_pct - n_pct:.0f}%")
-                    c4.write(f"{s['total']} Qs")
+                    c2.metric("Gemma2", f"{nl:.0f}%")
+                    c3.metric("Mixtral", f"{nr:.0f}%", delta=f"{nr-nl:+.0f}%")
+                    c4.metric("Aware", f"{aw:.0f}%", delta=f"{aw-nl:+.0f}%")
+                    c5.caption(f"{t} Qs")
 
-                st.subheader("🔍 Question-by-Question Breakdown")
-                for res in results["breakdown"]:
-                    icon_n = "✅" if res["naive_pass"] else "❌"
-                    icon_a = "✅" if res["aware_pass"] else "❌"
-                    trap = "🎯 TRICKY" if res["tricky"] else ""
-                    st.markdown(f"**[{res['category']}] {trap}** {res['query']}\n- Chatbot: {icon_n} | RAG: {icon_a}")
-                    st.divider()
+                st.markdown("---")
+                st.subheader("🔍 Question-by-Question Breakdown  *(with Judge Reasoning)*")
+
+                def score_badge(score):
+                    if score >= 8: return f"🟢 {score}/10"
+                    if score >= 6: return f"🟡 {score}/10"
+                    return f"🔴 {score}/10"
+
+                for i, res in enumerate(results["breakdown"]):
+                    trap_tag = " 🎯 **AMENDMENT TRAP**" if res["tricky"] else ""
+                    label = f"**Q{i+1}. [{res['category']}]**{trap_tag} — {res['query']}"
+                    with st.expander(label):
+                        st.markdown(f"**📖 Reference Answer:**\n> {res['reference']}")
+                        st.markdown("---")
+                        col_a, col_b, col_c = st.columns(3)
+                        with col_a:
+                            st.markdown(f"**🤖 Gemma2-9b**  {score_badge(res['naive_llm_score'])}")
+                            st.caption(res.get("naive_llm_reason", ""))
+                        with col_b:
+                            st.markdown(f"**📄 Mixtral RAG**  {score_badge(res['naive_rag_score'])}")
+                            st.caption(res.get("naive_rag_reason", ""))
+                        with col_c:
+                            st.markdown(f"**⚖️ Aware RAG**  {score_badge(res['aware_score'])}")
+                            st.caption(res.get("aware_reason", ""))
+
             except Exception as e:
-                st.error(f"Evaluation Failed: {e}")
+                st.error(f"Evaluation Failed: {str(e)}")
 
-        
+        st.markdown("---")
+        st.subheader("🔬 RAGAS IEEE-Standard Metrics")
+        st.write("""
+        **RAGAS** is the gold-standard framework for RAG evaluation used in IEEE/ACL/NeurIPS papers.
+        It measures 4 mathematically grounded metrics on your actual retrieved document chunks —
+        no keyword matching, no model opinion.
+        """)
+        col_info1, col_info2 = st.columns(2)
+        with col_info1:
+            st.info("📐 **Faithfulness** — Does the answer only use retrieved content?\n\n📎 **Answer Relevancy** — Does the answer actually address the question?")
+        with col_info2:
+            st.info("🎯 **Context Precision** — Are the retrieved chunks relevant? (signal:noise)\n\n🔁 **Context Recall** — Does the context cover the full reference answer?")
+
+        n_q = st.slider("Number of questions to run RAGAS on", min_value=5, max_value=50, value=20, step=5)
+        if st.button(f"🔬 Run RAGAS Analysis ({n_q} Questions)", use_container_width=True):
+            try:
+                rg_bar  = st.progress(0)
+                rg_text = st.empty()
+
+                def rg_progress(p, msg):
+                    rg_bar.progress(p)
+                    rg_text.text(msg)
+
+                rg = run_ragas_evaluation(rg_progress, n_questions=n_q)
+                rg_text.text("✅ RAGAS Complete!")
+
+                nr = rg["naive_rag"]
+                aw = rg["aware_rag"]
+                imp = rg["improvement"]
+
+                st.markdown("#### 📊 RAGAS Scores  *(0.0 – 1.0, higher is better)*")
+                metric_names = {
+                    "faithfulness":      "📐 Faithfulness",
+                    "answer_relevancy":  "📎 Answer Relevancy",
+                    "context_precision": "🎯 Context Precision",
+                    "context_recall":    "🔁 Context Recall",
+                    "ragas_score":       "⭐ RAGAS Score (avg)",
+                }
+                header_cols = st.columns([3, 2, 2, 2])
+                header_cols[0].markdown("**Metric**")
+                header_cols[1].markdown("**Naive RAG**")
+                header_cols[2].markdown("**Aware RAG**")
+                header_cols[3].markdown("**Improvement**")
+                st.divider()
+
+                for key, label in metric_names.items():
+                    nv = nr[key]
+                    av = aw[key]
+                    diff = imp[key]
+                    c1, c2, c3, c4 = st.columns([3, 2, 2, 2])
+                    c1.write(f"**{label}**")
+                    c2.metric("", f"{nv:.3f}")
+                    c3.metric("", f"{av:.3f}", delta=f"{diff:+.3f}")
+                    arrow = "✅" if diff > 0 else "⚠️"
+                    c4.write(f"{arrow} {'+' if diff>0 else ''}{diff:.3f}")
+
+                st.markdown("#### 🔍 Per-Question RAGAS Scores")
+                for i, (q, nq, aq) in enumerate(zip(
+                    rg["questions"], nr["per_question"], aw["per_question"]
+                )):
+                    with st.expander(f"Q{i+1}: {q[:80]}..."):
+                        cols = st.columns(5)
+                        cols[0].markdown("**Metric**")
+                        cols[1].markdown("Naive")
+                        cols[2].markdown("Aware")
+                        cols[3].markdown("Δ")
+                        cols[4].markdown("Status")
+                        for metric_key in ["faithfulness","answer_relevancy","context_precision","context_recall"]:
+                            nv = nq.get(metric_key, 0) or 0
+                            av = aq.get(metric_key, 0) or 0
+                            d  = av - nv
+                            c0, c1, c2, c3, c4 = st.columns(5)
+                            c0.caption(metric_key.replace("_"," ").title())
+                            c1.caption(f"{nv:.2f}")
+                            c2.caption(f"{av:.2f}")
+                            c3.caption(f"{d:+.2f}")
+                            c4.caption("✅" if d >= 0 else "🔴")
+
+            except Exception as e:
+                st.error(f"RAGAS Failed: {str(e)}")
     with tab_manage:
         st.write("Upload and examine loaded policy structures.")
         
@@ -328,13 +464,15 @@ elif st.session_state['role'] == "admin":
                 
         st.divider()
         st.subheader("Raw Storage Index")
+        pdf_files = []  # Initialize early to avoid scope issues in Rename section
         if os.path.exists("data/raw"):
             files = os.listdir("data/raw")
             pdf_files = [f for f in files if f.endswith(".pdf")]
             st.metric("Total Raw Documents", len(pdf_files))
             with st.expander("View Document Index"):
-                for pdf in pdf_files:
-                    st.markdown(f"- 📄 `{pdf}`")
+                for pdf in sorted(pdf_files):
+                    prefix = "🔵" if pdf.startswith("base_") else "🟡" if pdf.startswith("amendment_") else "📄"
+                    st.markdown(f"- {prefix} `{pdf}`")
         else:
             st.warning("No raw data directory found.")
             

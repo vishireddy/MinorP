@@ -4,16 +4,15 @@
         "is_amendment": false,
         "amends": "Unknown",
         "amended_by": [
-            "amendment_it_act_2008.pdf"
+            "amendment_it_act_2008.pdf",
+            "amendment_dpdp_2023.pdf"
         ]
     },
     "base_it_rsp_2011.pdf": {
-        "status": "Inactive/Superseded in part",
+        "status": "Active",
         "is_amendment": false,
         "amends": "Unknown",
-        "amended_by": [
-            "amendment_it_act_2008.pdf"
-        ]
+        "amended_by": []
     },
     "base_consumer_protection_1986.pdf": {
         "status": "Inactive/Superseded in part",
@@ -26,13 +25,13 @@
     "amendment_consumer_protection_2019.pdf": {
         "status": "Active",
         "is_amendment": true,
-        "amends": "Unknown",
+        "amends": "Consumer Protection Act, 1986",
         "amended_by": []
     },
     "amendment_policy.pdf": {
         "status": "Active",
         "is_amendment": true,
-        "amends": "Right to Information Act, 2005",
+        "amends": "Unknown",
         "amended_by": []
     },
     "amendment_it_act_2008.pdf": {
@@ -42,17 +41,15 @@
         "amended_by": []
     },
     "base_policy.pdf": {
-        "status": "Inactive/Superseded in part",
+        "status": "Active",
         "is_amendment": false,
         "amends": "Unknown",
-        "amended_by": [
-            "amendment_policy.pdf"
-        ]
+        "amended_by": []
     },
     "amendment_dpdp_2023.pdf": {
         "status": "Active",
         "is_amendment": true,
-        "amends": "Unknown",
+        "amends": "Information Technology Act, 2000 (Section 43A)",
         "amended_by": []
     },
     "base_rpact_1950.pdf": {
@@ -68,25 +65,19 @@
     "amendment_rpact_1989.pdf": {
         "status": "Active",
         "is_amendment": true,
-        "amends": "Representation of the People Act",
+        "amends": "Representation of the People Act, 1950",
         "amended_by": []
     },
     "amendment_rpact_1988.pdf": {
         "status": "Active",
         "is_amendment": true,
-        "amends": "Representation of the People Act, 1950 and the Representation of the People Act, 1951",
+        "amends": "Representation of the People Act, 1950 and 1951",
         "amended_by": []
     },
     "amendment_rpact_1951.pdf": {
         "status": "Active",
         "is_amendment": true,
-        "amends": "Unknown",
-        "amended_by": []
-    },
-    "constitution_of_india_may2024.pdf": {
-        "status": "Active",
-        "is_amendment": false,
-        "amends": "Unknown",
+        "amends": "Representation of the People Act, 1950",
         "amended_by": []
     },
     "amendment_rti_2019.pdf": {
@@ -95,76 +86,32 @@
         "amends": "Right to Information Act, 2005",
         "amended_by": []
     },
-    "base_india_con_act_1872.pdf": {
-        "status": "Inactive/Superseded in part",
-        "is_amendment": false,
-        "amends": "Unknown",
-        "amended_by": [
-            "amendment_it_act_2008.pdf"
-        ]
-    },
     "amendment_bsa_2023.pdf": {
         "status": "Active",
         "is_amendment": true,
-        "amends": "Unknown",
+        "amends": "Indian Evidence Act, 1872",
         "amended_by": []
     },
-    "base_ib_2016.pdf": {
+    "amendment_bnss_2023.pdf": {
         "status": "Active",
-        "is_amendment": false,
-        "amends": "Unknown",
-        "amended_by": []
-    },
-    "base_forest_rights_act_2006.pdf": {
-        "status": "Inactive/Superseded in part",
-        "is_amendment": false,
-        "amends": "Unknown",
-        "amended_by": [
-            "amendment_it_act_2008.pdf"
-        ]
-    },
-    "base_tpa_1882.pdf": {
-        "status": "Active",
-        "is_amendment": false,
-        "amends": "Unknown",
+        "is_amendment": true,
+        "amends": "Code of Criminal Procedure, 1973",
         "amended_by": []
     },
     "base_ccp1973.pdf": {
-        "status": "Active",
-        "is_amendment": false,
-        "amends": "Unknown",
-        "amended_by": []
-    },
-    "base_sebi_1992.pdf": {
-        "status": "Active",
-        "is_amendment": false,
-        "amends": "Unknown",
-        "amended_by": []
-    },
-    "base_iea_1872.pdf": {
-        "status": "Active",
-        "is_amendment": false,
-        "amends": "Unknown",
-        "amended_by": []
-    },
-    "base_rbi_1934.pdf": {
-        "status": "Active",
-        "is_amendment": false,
-        "amends": "Unknown",
-        "amended_by": []
-    },
-    "base_wlpa_1972.pdf": {
-        "status": "Active",
-        "is_amendment": false,
-        "amends": "Unknown",
-        "amended_by": []
-    },
-    "base_competition_act_2002.pdf": {
         "status": "Inactive/Superseded in part",
         "is_amendment": false,
         "amends": "Unknown",
         "amended_by": [
-            "amendment_it_act_2008.pdf"
+            "amendment_bnss_2023.pdf"
+        ]
+    },
+    "base_iea_1872.pdf": {
+        "status": "Inactive/Superseded in part",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": [
+            "amendment_bsa_2023.pdf"
         ]
     },
     "base_rti_2005.pdf": {
@@ -187,9 +134,51 @@
         "amends": "Unknown",
         "amended_by": []
     },
-    "amendment_bnss_2023.pdf": {
+    "base_forest_rights_act_2006.pdf": {
         "status": "Active",
-        "is_amendment": true,
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "base_tpa_1882.pdf": {
+        "status": "Active",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "base_india_con_act_1872.pdf": {
+        "status": "Active",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "base_sebi_1992.pdf": {
+        "status": "Active",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "base_rbi_1934.pdf": {
+        "status": "Active",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "base_ib_2016.pdf": {
+        "status": "Active",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "base_wlpa_1972.pdf": {
+        "status": "Active",
+        "is_amendment": false,
+        "amends": "Unknown",
+        "amended_by": []
+    },
+    "base_competition_act_2002.pdf": {
+        "status": "Active",
+        "is_amendment": false,
         "amends": "Unknown",
         "amended_by": []
     },
@@ -200,12 +189,10 @@
         "amended_by": []
     },
     "base_arms_act_1959.pdf": {
-        "status": "Inactive/Superseded in part",
+        "status": "Active",
         "is_amendment": false,
         "amends": "Unknown",
-        "amended_by": [
-            "amendment_it_act_2008.pdf"
-        ]
+        "amended_by": []
     },
     "base_trai_1997.pdf": {
         "status": "Active",
