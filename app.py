@@ -2,46 +2,102 @@ import streamlit as st
 import os
 from dotenv import load_dotenv
 from src.auth_db import init_db, register_user, verify_user, save_chat, get_chat_history, purge_system_chats
-from src.evaluate import run_evaluation_suite, run_ragas_evaluation
+from src.evaluate import run_evaluation_suite, run_ragas_evaluation, run_ablation_study
 from src.ingestion import load_and_chunk_pdfs
 from src.metadata_tagger import enrich_metadata
 from src.retrieval_engine import get_vectorstore, create_relationship_aware_rag_chain
 from src.api_ingestion import download_act_pdf, search_acts, get_available_acts, fetch_from_any_url
+from src.results_manager import (
+    load_eval_results, load_ablation_results, load_ragas_results,
+    results_exist, ablation_results_exist, ragas_results_exist,
+    export_breakdown_to_csv_bytes, export_metrics_to_csv_bytes, generate_paper_stats
+)
 
 load_dotenv()
 init_db()
 
 st.set_page_config(page_title="Relationship-Aware RAG", page_icon="⚖️", layout="wide")
 
-# Hide standard formatting & Implement Clean/White Professional Aesthetic
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
-    html, body, [class*="css"]  {
-        font-family: 'Inter', sans-serif;
-    }
-    header {visibility: hidden;}
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    .block-container {
-        padding-top: 2rem !important;
-        max-width: 1000px;
-    }
-    .stButton>button {
-        border-radius: 8px;
-        font-weight: 600;
-        transition: all 0.2s ease;
-    }
-    .stTextInput>div>div>input {
-        border-radius: 8px;
-    }
-    div[data-testid="stChatMessage"] {
-        background-color: white;
-        border-radius: 12px;
-        padding: 15px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        border: 1px solid #E5E7EB;
-    }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+html, body, [class*="css"] {
+    font-family: 'Inter', sans-serif !important;
+}
+header {visibility: hidden;}
+footer {visibility: hidden;}
+
+/* Modern Buttons */
+.stButton>button, .stDownloadButton>button {
+    border-radius: 8px !important;
+    border: none !important;
+    background: #2563eb !important;
+    color: white !important;
+    font-weight: 600 !important;
+    padding: 0.5rem 1rem !important;
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2), 0 2px 4px -1px rgba(37, 99, 235, 0.1) !important;
+    transition: all 0.2s ease-in-out !important;
+}
+.stButton>button:hover, .stDownloadButton>button:hover {
+    background: #1d4ed8 !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3), 0 4px 6px -2px rgba(37, 99, 235, 0.15) !important;
+}
+
+/* Chat Messages */
+div[data-testid="stChatMessage"] {
+    border-radius: 12px !important;
+    border: 1px solid #e2e8f0 !important;
+    background-color: #ffffff !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05) !important;
+    padding: 1.2rem !important;
+}
+div[data-testid="stChatMessage"] * {
+    color: #1e293b !important;
+}
+
+/* Metric Cards */
+div[data-testid="metric-container"] {
+    background-color: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 12px !important;
+    padding: 1.2rem !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05) !important;
+    transition: all 0.2s ease-in-out !important;
+}
+div[data-testid="metric-container"]:hover {
+    border-color: #cbd5e1 !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
+    transform: translateY(-2px) !important;
+}
+div[data-testid="stMetricValue"] {
+    color: #0f172a !important;
+    font-weight: 700 !important;
+}
+div[data-testid="stMetricLabel"] {
+    color: #64748b !important;
+    font-weight: 600 !important;
+}
+
+/* Inputs */
+.stTextInput>div>div>input {
+    border-radius: 8px !important;
+    border: 1px solid #cbd5e1 !important;
+    padding: 0.5rem 1rem !important;
+}
+.stTextInput>div>div>input:focus {
+    border-color: #2563eb !important;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2) !important;
+}
+
+/* Expander */
+.streamlit-expanderHeader {
+    border-radius: 8px !important;
+    background-color: #f8fafc !important;
+    border: 1px solid #e2e8f0 !important;
+    color: #1e293b !important;
+    font-weight: 600 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -99,6 +155,9 @@ with st.sidebar:
             st.rerun()
             
     st.divider()
+    
+    st.markdown("### ⚙️ Engine Settings")
+    st.session_state['strict_mode'] = st.toggle("Strict RAG Mode (No LLM Fallback)", value=False, help="When ON, the AI will refuse to answer if the context is missing. When OFF, it falls back to internal knowledge.")
 
 st.markdown("""
 <div style="background-color: white; padding: 25px; border-radius: 8px; margin-bottom: 25px; border-left: 5px solid #1E3A8A; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
@@ -156,7 +215,8 @@ if st.session_state['role'] in ["citizen", "guest"]:
             with st.chat_message("assistant"):
                 with st.spinner("Bridging semantic policy networks..."):
                     try:
-                        rag_chain = create_relationship_aware_rag_chain()
+                        is_strict = st.session_state.get('strict_mode', False)
+                        rag_chain = create_relationship_aware_rag_chain(strict_mode=is_strict)
                         response = rag_chain.invoke({"input": prompt})
                         
                         answer = response["answer"]
@@ -182,7 +242,9 @@ if st.session_state['role'] in ["citizen", "guest"]:
                         st.error(f"Memory Architecture Error: {str(e)}")
 elif st.session_state['role'] == "admin":
     st.markdown("### ⚙️ Engine Administrator Dashboard")
-    tab_sync, tab_graph, tab_eval, tab_manage = st.tabs(["🚀 System Sync", "🕸️ Relationship Graph", "📊 Evaluation Lab", "🗄️ File Manager"])
+    tab_sync, tab_graph, tab_eval, tab_ablation, tab_manage = st.tabs(
+        ["🚀 System Sync", "🕸️ Relationship Graph", "📊 Evaluation Lab", "🧪 Ablation Study", "🗄️ File Manager"]
+    )
     
     with tab_sync:
         st.write("Manage structural dependencies and synchronize raw PDFs.")
@@ -206,70 +268,86 @@ elif st.session_state['role'] == "admin":
             st.warning("Nodes Offline. Sync Required.")
             
     with tab_eval:
-        st.write("Run the 50-question empirical test battery comparing three modes: **Naive LLM** (ChatGPT-style) vs **Naive RAG** (basic retrieval) vs **Aware RAG** (yours).")
+        st.subheader("📊 RAG Evaluation Suite")
 
-        # Sync warning
-        raw_count = len([f for f in os.listdir("data/raw") if f.endswith(".pdf")]) if os.path.exists("data/raw") else 0
-        if raw_count > 0 and not os.path.exists("data/chroma_db"):
-            st.warning("⚠️ Vector database not found. Run System Sync before evaluating.")
-        elif raw_count > 0:
-            st.info(f"📦 {raw_count} PDFs in raw storage. If you recently added files, run System Sync first to index them.")
+        # ── Cached results loader ──────────────────────────────
+        if results_exist():
+            cached = load_eval_results()
+            ts = cached.get("timestamp", "Unknown") if cached else "Unknown"
+            st.success(f"✅ Cached results found (run: {ts}). Load instantly or re-run below.")
+            col_load, col_csv1, col_csv2 = st.columns(3)
+            with col_load:
+                if st.button("📂 Load Cached Results", use_container_width=True):
+                    st.session_state["eval_results"] = cached
+                    st.rerun()
+            if cached:
+                with col_csv1:
+                    st.download_button("⬇️ Export Breakdown", data=export_breakdown_to_csv_bytes(cached),
+                                       file_name="eval_breakdown.csv", mime="text/csv", use_container_width=True)
+                with col_csv2:
+                    st.download_button("⬇️ Export Metrics", data=export_metrics_to_csv_bytes(cached),
+                                       file_name="eval_metrics.csv", mime="text/csv", use_container_width=True)
 
         if st.button("▶️ Run Full Evaluation (50 Questions)", use_container_width=True, type="primary"):
             try:
                 progress_bar = st.progress(0)
                 status_text = st.empty()
-
                 def update_progress(p, m):
                     progress_bar.progress(p)
                     status_text.text(m)
-
                 results = run_evaluation_suite(update_progress)
-                status_text.text("✅ Evaluation Complete!")
-                m = results["metrics"]
+                status_text.text("✅ Evaluation Complete! Results auto-saved.")
+                st.session_state["eval_results"] = {"results": results}
+                st.rerun()
+            except Exception as e:
+                st.error(f"Evaluation Failed: {str(e)}")
 
-                st.markdown("---")
-                st.subheader("📊 Overall Performance  *(Pass = Judge Score ≥ 6/10)*")
-                col1, col2, col3, col4 = st.columns(4)
-                col1.metric(
-                    "🤖 Gemma2-9b (Google)",
-                    f"{m['naive_llm_accuracy']:.1f}%",
-                    help="Google's Gemma2-9b via Groq — no document retrieval, pure training knowledge"
-                )
-                col2.metric(
-                    "📄 Mixtral-8x7b (Basic RAG)",
-                    f"{m['naive_rag_accuracy']:.1f}%",
-                    delta=f"{m['naive_rag_accuracy'] - m['naive_llm_accuracy']:+.1f}% vs Gemma2",
-                    help="Mistral Mixtral retrieves documents but ignores amendment relationships"
-                )
-                col3.metric(
-                    "⚖️ LLaMA3 Aware RAG (Ours)",
-                    f"{m['aware_accuracy']:.1f}%",
-                    delta=f"{m['rag_improvement_over_llm']:+.1f}% vs Gemma2",
-                    help="Meta LLaMA3.1 with relationship-aware retrieval and amendment injection"
-                )
-                col4.metric("Total Questions", m["total_queries"])
+        # ── Display results (from session or cached) ───────────
+        display_results = st.session_state.get("eval_results")
+        if display_results:
+            results = display_results.get("results", display_results)
+            m = results["metrics"]
 
-                st.markdown("#### 🏅 Average Judge Score  *(out of 10)*")
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Gemma2-9b", f"{m['naive_llm_avg_score']:.2f}/10")
-                c2.metric("Mixtral Basic RAG", f"{m['naive_rag_avg_score']:.2f}/10",
-                          delta=f"{m['naive_rag_avg_score'] - m['naive_llm_avg_score']:+.2f}")
-                c3.metric("LLaMA3 Aware RAG", f"{m['aware_avg_score']:.2f}/10",
-                          delta=f"{m['aware_avg_score'] - m['naive_llm_avg_score']:+.2f}")
+            st.markdown("---")
+            st.subheader("Overall Performance  *(Pass = Score ≥ 6/10)*")
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("🤖 No RAG", f"{m['naive_llm_accuracy']:.1f}%")
+            col2.metric("📄 Naive RAG", f"{m['naive_rag_accuracy']:.1f}%",
+                        delta=f"{m['naive_rag_accuracy'] - m['naive_llm_accuracy']:+.1f}% vs No RAG")
+            col3.metric("⚖️ Aware RAG", f"{m['aware_accuracy']:.1f}%",
+                        delta=f"{m['rag_improvement_over_llm']:+.1f}% vs No RAG")
+            col4.metric("Test Size", f"{m['total_queries']} Qs")
 
-                st.markdown("---")
-                st.subheader("🎯 Amendment-Trap Questions")
-                st.caption("Questions specifically designed to expose chatbots that don't track law amendments")
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Gemma2-9b", f"{m['tricky_naive_llm_accuracy']:.1f}%")
-                c2.metric("Mixtral RAG", f"{m['tricky_naive_rag_accuracy']:.1f}%",
-                          delta=f"{m['tricky_naive_rag_accuracy'] - m['tricky_naive_llm_accuracy']:+.1f}%")
-                c3.metric("Aware RAG", f"{m['tricky_aware_accuracy']:.1f}%",
-                          delta=f"{m['tricky_aware_accuracy'] - m['tricky_naive_llm_accuracy']:+.1f}%")
+            st.markdown("<br>", unsafe_allow_html=True)
+            c1, c2, c3 = st.columns(3)
+            c1.metric("🤖 Avg Judge Score (No RAG)", f"{m['naive_llm_avg_score']:.2f}/10")
+            c2.metric("📄 Avg Judge Score (Naive RAG)", f"{m['naive_rag_avg_score']:.2f}/10",
+                      delta=f"{m['naive_rag_avg_score'] - m['naive_llm_avg_score']:+.2f}")
+            c3.metric("⚖️ Avg Judge Score (Aware RAG)", f"{m['aware_avg_score']:.2f}/10",
+                      delta=f"{m['aware_avg_score'] - m['naive_llm_avg_score']:+.2f}")
 
-                st.markdown("---")
-                st.subheader("📂 Category Breakdown")
+            # Latency
+            nl_lat = m.get("naive_llm_avg_latency_ms")
+            nr_lat = m.get("naive_rag_avg_latency_ms")
+            aw_lat = m.get("aware_avg_latency_ms")
+            if nl_lat and nr_lat and aw_lat:
+                st.markdown("<br>", unsafe_allow_html=True)
+                lc1, lc2, lc3 = st.columns(3)
+                lc1.metric("⏱️ Latency (No RAG)", f"{nl_lat} ms")
+                lc2.metric("⏱️ Latency (Naive RAG)", f"{nr_lat} ms", delta=f"{nr_lat - nl_lat:+d} ms")
+                lc3.metric("⏱️ Latency (Aware RAG)", f"{aw_lat} ms", delta=f"{aw_lat - nl_lat:+d} ms")
+
+            st.markdown("---")
+            st.subheader("🎯 Amendment-Trap Pass Rates")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("🤖 No RAG", f"{m['tricky_naive_llm_accuracy']:.1f}%")
+            c2.metric("📄 Naive RAG", f"{m['tricky_naive_rag_accuracy']:.1f}%",
+                      delta=f"{m['tricky_naive_rag_accuracy'] - m['tricky_naive_llm_accuracy']:+.1f}%")
+            c3.metric("⚖️ Aware RAG", f"{m['tricky_aware_accuracy']:.1f}%",
+                      delta=f"{m['tricky_aware_accuracy'] - m['tricky_naive_llm_accuracy']:+.1f}%")
+
+            st.markdown("---")
+            with st.expander("📂 View Category Breakdown"):
                 for cat, s in results["category_scores"].items():
                     t = s["total"]
                     nl = s["naive_llm_pass"] / t * 100
@@ -277,38 +355,42 @@ elif st.session_state['role'] == "admin":
                     aw = s["aware_pass"] / t * 100
                     c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1, 1])
                     c1.write(f"**{cat}**")
-                    c2.metric("Gemma2", f"{nl:.0f}%")
-                    c3.metric("Mixtral", f"{nr:.0f}%", delta=f"{nr-nl:+.0f}%")
-                    c4.metric("Aware", f"{aw:.0f}%", delta=f"{aw-nl:+.0f}%")
+                    c2.metric("No RAG", f"{nl:.0f}%")
+                    c3.metric("Naive RAG", f"{nr:.0f}%", delta=f"{nr-nl:+.0f}%")
+                    c4.metric("Aware RAG", f"{aw:.0f}%", delta=f"{aw-nl:+.0f}%")
                     c5.caption(f"{t} Qs")
 
-                st.markdown("---")
-                st.subheader("🔍 Question-by-Question Breakdown  *(with Judge Reasoning)*")
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.subheader("🔍 Question-by-Question Analysis")
+            def score_badge(score):
+                if score >= 8: return f"🟢 {score}/10"
+                if score >= 6: return f"🟡 {score}/10"
+                return f"🔴 {score}/10"
 
-                def score_badge(score):
-                    if score >= 8: return f"🟢 {score}/10"
-                    if score >= 6: return f"🟡 {score}/10"
-                    return f"🔴 {score}/10"
+            for i, res in enumerate(results["breakdown"]):
+                trap_tag = " 🎯 **AMENDMENT TRAP**" if res["tricky"] else ""
+                label = f"**Q{i+1}. [{res['category']}]**{trap_tag} — {res['query']}"
+                with st.expander(label):
+                    st.markdown(f"**📖 Reference Answer:**\n> {res['reference']}")
+                    st.markdown("---")
+                    col_a, col_b, col_c = st.columns(3)
+                    with col_a:
+                        st.markdown(f"**🤖 LLaMA3.3 No RAG**  {score_badge(res['naive_llm_score'])}")
+                        st.caption(res.get("naive_llm_reason", ""))
+                        if res.get("naive_llm_latency_ms"):
+                            st.caption(f"⏱ {res['naive_llm_latency_ms']} ms")
+                    with col_b:
+                        st.markdown(f"**📄 Naive RAG**  {score_badge(res['naive_rag_score'])}")
+                        st.caption(res.get("naive_rag_reason", ""))
+                        if res.get("naive_rag_latency_ms"):
+                            st.caption(f"⏱ {res['naive_rag_latency_ms']} ms")
+                    with col_c:
+                        st.markdown(f"**⚖️ Aware RAG**  {score_badge(res['aware_score'])}")
+                        st.caption(res.get("aware_reason", ""))
+                        if res.get("aware_latency_ms"):
+                            st.caption(f"⏱ {res['aware_latency_ms']} ms")
 
-                for i, res in enumerate(results["breakdown"]):
-                    trap_tag = " 🎯 **AMENDMENT TRAP**" if res["tricky"] else ""
-                    label = f"**Q{i+1}. [{res['category']}]**{trap_tag} — {res['query']}"
-                    with st.expander(label):
-                        st.markdown(f"**📖 Reference Answer:**\n> {res['reference']}")
-                        st.markdown("---")
-                        col_a, col_b, col_c = st.columns(3)
-                        with col_a:
-                            st.markdown(f"**🤖 Gemma2-9b**  {score_badge(res['naive_llm_score'])}")
-                            st.caption(res.get("naive_llm_reason", ""))
-                        with col_b:
-                            st.markdown(f"**📄 Mixtral RAG**  {score_badge(res['naive_rag_score'])}")
-                            st.caption(res.get("naive_rag_reason", ""))
-                        with col_c:
-                            st.markdown(f"**⚖️ Aware RAG**  {score_badge(res['aware_score'])}")
-                            st.caption(res.get("aware_reason", ""))
 
-            except Exception as e:
-                st.error(f"Evaluation Failed: {str(e)}")
 
         st.markdown("---")
         st.subheader("🔬 RAGAS IEEE-Standard Metrics")
@@ -390,6 +472,120 @@ elif st.session_state['role'] == "admin":
 
             except Exception as e:
                 st.error(f"RAGAS Failed: {str(e)}")
+    with tab_ablation:
+        st.write("""
+        **Ablation Study** — isolates the exact contribution of the Relationship Graph.
+
+        Both pipelines use identical **Hybrid BM25 + Vector (RRF)** retrieval and **LLaMA3.1-8b**.
+        The only difference:
+        - **Pipeline A (Hybrid RAG Only):** Relationship injection DISABLED
+        - **Pipeline B (Aware RAG):** Relationship injection ENABLED ✅
+
+        The delta between them proves the graph's value beyond retrieval alone.
+        """)
+
+        if ablation_results_exist():
+            abl_cached = load_ablation_results()
+            abl_ts = abl_cached.get("timestamp", "Unknown") if abl_cached else "Unknown"
+            st.success(f"✅ Cached ablation results found (run: {abl_ts}).")
+            if st.button("📂 Load Cached Ablation Results", use_container_width=True):
+                st.session_state["ablation_results"] = abl_cached
+                st.rerun()
+
+        n_abl = st.slider("Questions for ablation", min_value=10, max_value=50, value=50, step=10)
+        if st.button(f"▶️ Run Ablation Study ({n_abl} Questions)", use_container_width=True, type="primary"):
+            try:
+                abl_bar  = st.progress(0)
+                abl_text = st.empty()
+                def abl_progress(p, msg):
+                    abl_bar.progress(p)
+                    abl_text.text(msg)
+                abl_res = run_ablation_study(abl_progress, n_questions=n_abl)
+                abl_text.text("✅ Ablation Complete! Results auto-saved.")
+                st.session_state["ablation_results"] = abl_res
+                st.rerun()
+            except Exception as e:
+                st.error(f"Ablation Failed: {str(e)}")
+
+        abl_display = st.session_state.get("ablation_results")
+        if abl_display:
+            am = abl_display.get("metrics", abl_display.get("results", {}).get("metrics", {}))
+
+            st.markdown("---")
+            st.subheader("📊 Ablation Results — 4 Pipelines")
+            st.caption("Progressive component addition: each row adds exactly one architectural element.")
+
+            # Pass rates — 4 columns
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("🤖 No RAG\n(LLaMA3.3-70b)", f"{am.get('no_rag_pass_rate', 0):.1f}%",
+                      help="Pure LLM — no documents retrieved")
+            c2.metric("📄 Naive RAG\n(Qwen3-32b)", f"{am.get('naive_rag_pass_rate', 0):.1f}%",
+                      delta=f"{am.get('retrieval_gain', 0):+.1f}% vs No RAG",
+                      help="Basic vector retrieval added")
+            c3.metric("🔗 Hybrid RAG\n(LLaMA3.1-8b)", f"{am.get('hybrid_pass_rate', 0):.1f}%",
+                      delta=f"{am.get('hybrid_gain', 0):+.1f}% vs Naive RAG",
+                      help="BM25 + Vector RRF added, no graph")
+            c4.metric("⚖️ Aware RAG ✅\n(LLaMA3.1-8b)", f"{am.get('aware_pass_rate', 0):.1f}%",
+                      delta=f"{am.get('graph_gain', 0):+.1f}% vs Hybrid",
+                      help="Relationship graph injection added")
+
+            st.markdown("#### 🏅 Average Judge Score (/10)")
+            s1, s2, s3, s4 = st.columns(4)
+            s1.metric("No RAG",    f"{am.get('no_rag_avg_score', 0):.2f}")
+            s2.metric("Naive RAG", f"{am.get('naive_rag_avg_score', 0):.2f}",
+                      delta=f"{am.get('naive_rag_avg_score', 0) - am.get('no_rag_avg_score', 0):+.2f}")
+            s3.metric("Hybrid RAG", f"{am.get('hybrid_avg_score', 0):.2f}",
+                      delta=f"{am.get('hybrid_avg_score', 0) - am.get('naive_rag_avg_score', 0):+.2f}")
+            s4.metric("Aware RAG", f"{am.get('aware_avg_score', 0):.2f}",
+                      delta=f"{am.get('aware_avg_score', 0) - am.get('hybrid_avg_score', 0):+.2f}")
+
+            if am.get("aware_avg_latency"):
+                st.markdown("#### ⏱️ Avg Response Latency (ms)")
+                l1, l2, l3, l4 = st.columns(4)
+                l1.metric("No RAG",    f"{am.get('no_rag_avg_latency', 0)} ms")
+                l2.metric("Naive RAG", f"{am.get('naive_rag_avg_latency', 0)} ms")
+                l3.metric("Hybrid RAG", f"{am.get('hybrid_avg_latency', 0)} ms")
+                l4.metric("Aware RAG", f"{am.get('aware_avg_latency', 0)} ms")
+
+            st.markdown("#### 🎯 Amendment-Trap Pass Rate")
+            t1, t2, t3, t4, t5 = st.columns(5)
+            t1.metric("Trap Questions", am.get("tricky_total", 0))
+            t2.metric("No RAG",    f"{am.get('tricky_no_rag', 0):.1f}%")
+            t3.metric("Naive RAG", f"{am.get('tricky_naive_rag', 0):.1f}%",
+                      delta=f"{am.get('tricky_naive_rag', 0) - am.get('tricky_no_rag', 0):+.1f}%")
+            t4.metric("Hybrid RAG", f"{am.get('tricky_hybrid', 0):.1f}%",
+                      delta=f"{am.get('tricky_hybrid', 0) - am.get('tricky_naive_rag', 0):+.1f}%")
+            t5.metric("Aware RAG", f"{am.get('tricky_aware', 0):.1f}%",
+                      delta=f"{am.get('tricky_aware', 0) - am.get('tricky_hybrid', 0):+.1f}%")
+
+            st.markdown("---")
+            st.subheader("🔍 Question-by-Question Ablation Breakdown")
+            for i, r in enumerate(abl_display.get("breakdown", [])):
+                trap_tag = " 🎯" if r.get("tricky") else ""
+                with st.expander(f"Q{i+1}.{trap_tag} [{r['category']}] {r['query']}"):
+                    col_a, col_b, col_c, col_d = st.columns(4)
+                    with col_a:
+                        badge = "🟢" if r.get("no_rag_pass") else "🔴"
+                        st.markdown(f"**{badge} No RAG**  {r.get('no_rag_score', 0)}/10")
+
+                        st.caption(r.get("no_rag_reason", ""))
+                        st.caption(f"⏱ {r.get('no_rag_latency_ms', 0)} ms")
+                    with col_b:
+                        badge = "🟢" if r.get("naive_rag_pass") else "🔴"
+                        st.markdown(f"**{badge} Naive RAG**  {r.get('naive_rag_score', 0)}/10")
+                        st.caption(r.get("naive_rag_reason", ""))
+                        st.caption(f"⏱ {r.get('naive_rag_latency_ms', 0)} ms")
+                    with col_c:
+                        badge = "🟢" if r.get("hybrid_pass") else "🔴"
+                        st.markdown(f"**{badge} Hybrid RAG**  {r.get('hybrid_score', 0)}/10")
+                        st.caption(r.get("hybrid_reason", ""))
+                        st.caption(f"⏱ {r.get('hybrid_latency_ms', 0)} ms")
+                    with col_d:
+                        badge = "🟢" if r.get("aware_pass") else "🔴"
+                        st.markdown(f"**{badge} Aware RAG ✅**  {r.get('aware_score', 0)}/10")
+                        st.caption(r.get("aware_reason", ""))
+                        st.caption(f"⏱ {r.get('aware_latency_ms', 0)} ms")
+
     with tab_manage:
         st.write("Upload and examine loaded policy structures.")
         

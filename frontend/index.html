@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LexPulse | Adaptive Legal Policy Intelligence</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/lucide@latest/lucide.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            color: #0f172a;
+            min-height: 100vh;
+            font-size: 15px;
+            line-height: 1.6;
+            letter-spacing: -0.01em;
+        }
+
+        h1, h2, h3, h4 {
+            font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+            letter-spacing: -0.03em;
+        }
+
+        p, span, input, button, a {
+            font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.05);
+        }
+
+        .glass-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 10px -1px rgba(0, 0, 0, 0.02);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass-card:hover {
+            transform: translateY(-4px);
+            border-color: #10b981;
+            box-shadow: 0 12px 30px -5px rgba(16, 185, 129, 0.15);
+        }
+
+        .gradient-text {
+            background: -webkit-linear-gradient(45deg, #0d9488, #10b981);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .gradient-btn {
+            background: linear-gradient(90deg, #0d9488 0%, #10b981 100%);
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2);
+            color: white;
+            transition: all 0.3s ease;
+        }
+        
+        .gradient-btn:hover {
+            transform: scale(1.02);
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+        }
+
+        .chat-bubble-user {
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            border-bottom-right-radius: 4px;
+            color: #0f172a;
+        }
+
+        .chat-bubble-ai {
+            background: #ffffff;
+            border: 1px solid #10b981;
+            box-shadow: 0 2px 10px rgba(16, 185, 129, 0.05);
+            border-bottom-left-radius: 4px;
+            color: #0f172a;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden p-6 gap-6 text-slate-800">
+
+    <!-- Sidebar -->
+    <aside class="glass-panel w-72 rounded-3xl p-6 flex flex-col justify-between">
+        <div>
+            <h1 class="text-4xl font-extrabold gradient-text mb-2">LexPulse</h1>
+            <p class="text-xs text-slate-500 font-bold uppercase tracking-wider mb-8">Adaptive Legal Policy Intelligence</p>
+            
+            <nav class="space-y-3 mb-8">
+                <a href="#" onclick="switchTab('chat')" id="nav-chat" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-100 text-teal-700 font-bold shadow-sm transition">
+                    <i data-lucide="message-square"></i> Policy Assistant
+                </a>
+                <a href="#" onclick="switchTab('sync')" id="nav-sync" class="hidden items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:text-teal-700 hover:bg-slate-50 font-semibold transition">
+                    <i data-lucide="refresh-ccw"></i> System Sync <i data-lucide="lock" class="w-3 h-3 ml-auto text-slate-400"></i>
+                </a>
+                <a href="#" onclick="switchTab('graph')" id="nav-graph" class="hidden items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:text-teal-700 hover:bg-slate-50 font-semibold transition">
+                    <i data-lucide="network"></i> Relationship Graph <i data-lucide="lock" class="w-3 h-3 ml-auto text-slate-400"></i>
+                </a>
+                <a href="#" onclick="switchTab('eval')" id="nav-eval" class="hidden items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:text-teal-700 hover:bg-slate-50 font-semibold transition">
+                    <i data-lucide="bar-chart-2"></i> Evaluation Lab <i data-lucide="lock" class="w-3 h-3 ml-auto text-slate-400"></i>
+                </a>
+            </nav>
+
+            <!-- Auth Panel -->
+            <div id="auth-panel" class="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                <div class="flex gap-2 mb-4 border-b border-slate-200 pb-2">
+                    <button onclick="setAuthTab('login')" id="auth-tab-login" class="flex-1 text-sm font-bold text-teal-600 border-b-2 border-teal-500 pb-1">Login</button>
+                    <button onclick="setAuthTab('register')" id="auth-tab-register" class="flex-1 text-sm font-semibold text-slate-400 pb-1">Register</button>
+                </div>
+                
+                <div id="form-login" class="space-y-3">
+                    <input type="text" id="l-user" placeholder="Username" class="w-full text-sm border border-slate-300 rounded-lg py-2 px-3 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100">
+                    <input type="password" id="l-pass" placeholder="Password" class="w-full text-sm border border-slate-300 rounded-lg py-2 px-3 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100">
+                    <button onclick="handleLogin()" class="w-full gradient-btn py-2 rounded-lg text-sm font-bold shadow-sm">Authenticate</button>
+                </div>
+                
+                <div id="form-register" class="space-y-3 hidden">
+                    <input type="text" id="r-user" placeholder="New Entity Name" class="w-full text-sm border border-slate-300 rounded-lg py-2 px-3 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100">
+                    <input type="password" id="r-pass" placeholder="Password" class="w-full text-sm border border-slate-300 rounded-lg py-2 px-3 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100">
+                    <input type="password" id="r-admin" placeholder="Admin Key (Optional)" class="w-full text-sm border border-slate-300 rounded-lg py-2 px-3 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-100">
+                    <button onclick="handleRegister()" class="w-full gradient-btn py-2 rounded-lg text-sm font-bold shadow-sm">Register</button>
+                </div>
+            </div>
+
+            <!-- Profile Panel (Hidden by default) -->
+            <div id="profile-panel" class="hidden bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                <p class="text-sm text-slate-500 font-semibold mb-1">👤 Welcome,</p>
+                <p class="text-lg font-bold text-slate-800 mb-2" id="profile-username">User</p>
+                <div class="flex items-center gap-2 mb-4">
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Level:</span>
+                    <span id="profile-role" class="px-2 py-0.5 rounded text-xs font-bold bg-teal-100 text-teal-700">GUEST</span>
+                </div>
+                <button onclick="handleLogout()" class="w-full border border-slate-300 py-2 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-100 transition">Log Off Securely</button>
+            </div>
+        </div>
+        
+        <div class="glass-card p-4 rounded-xl mt-4">
+            <p class="text-xs font-semibold text-slate-500 mb-2 border-b border-slate-100 pb-2 flex items-center gap-1"><i data-lucide="settings" class="w-3 h-3"></i> Engine Settings</p>
+            <label class="flex items-center gap-2 cursor-pointer mt-2">
+                <input type="checkbox" id="strict-mode-toggle" class="form-checkbox h-4 w-4 text-teal-600 rounded border-slate-300 transition">
+                <span class="text-xs font-bold text-slate-700">Strict RAG Mode</span>
+            </label>
+            <p class="text-[10px] text-slate-400 mt-1 leading-tight mb-3">No LLM fallback (Prevents hallucination)</p>
+            <div class="border-t border-slate-100 pt-3">
+                <p class="text-xs font-semibold text-slate-500">Model: <span class="text-teal-600 font-bold">LLaMA 3.1 8b</span></p>
+                <p class="text-xs font-semibold text-slate-500 mt-1">System: <span class="text-emerald-500 font-bold">Online</span></p>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col gap-6 relative">
+        
+        <!-- Chat Tab -->
+        <div id="tab-chat" class="flex-1 flex flex-col h-full glass-panel rounded-3xl p-6">
+            <div class="flex justify-between items-center mb-6 pb-4 border-b border-slate-200">
+                <h2 class="text-2xl font-bold text-slate-800">Policy Assistant</h2>
+                <div class="px-3 py-1 rounded-full bg-teal-50 text-teal-700 border border-teal-200 text-sm font-bold flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-teal-500 animate-pulse"></span>
+                    Aware RAG Active
+                </div>
+            </div>
+
+            <div id="chat-history" class="flex-1 overflow-y-auto space-y-6 mb-6 pr-4">
+                <div class="flex w-full justify-start">
+                    <div class="chat-bubble-ai rounded-2xl p-5 max-w-[80%]">
+                        <p class="font-bold mb-2 flex items-center gap-2 text-teal-700"><i data-lucide="cpu" class="w-5 h-5 text-teal-500"></i> LexPulse AI</p>
+                        <p class="text-slate-700 font-medium">Welcome to the Analytics Platform. How can we resolve your civic inquiries today?</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="relative shadow-sm rounded-2xl">
+                <input type="text" id="chat-input" class="w-full bg-white border border-slate-300 rounded-2xl py-4 pl-6 pr-16 text-slate-800 font-medium placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 transition shadow-sm" placeholder="Query policy documents..." onkeypress="if(event.key === 'Enter') sendMessage()">
+                <button onclick="sendMessage()" class="absolute right-3 top-2.5 p-2 rounded-xl gradient-btn text-white">
+                    <i data-lucide="send" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Sync Tab -->
+        <div id="tab-sync" class="flex-1 flex flex-col h-full glass-panel rounded-3xl p-6 hidden">
+            <div class="flex justify-between items-center mb-6 pb-4 border-b border-slate-200">
+                <h2 class="text-2xl font-bold text-slate-800">System Sync</h2>
+            </div>
+            <div class="glass-card rounded-2xl p-8 text-center max-w-2xl mx-auto mt-10">
+                <i data-lucide="database" class="w-16 h-16 mx-auto text-teal-500 mb-4"></i>
+                <h3 class="text-xl font-bold text-slate-800 mb-2">Synchronize Raw Policy Data</h3>
+                <p class="text-slate-500 font-medium mb-8">This will process the PDF repository, extract hierarchical structure, compute embeddings, and build the Relationship Graph for the Aware RAG engine.</p>
+                <button onclick="runSync()" class="gradient-btn px-8 py-4 rounded-xl font-bold flex items-center gap-2 mx-auto text-lg shadow-md">
+                    <i data-lucide="refresh-ccw" class="w-5 h-5"></i> Execute Full Vector Sync
+                </button>
+            </div>
+        </div>
+
+        <!-- Graph Tab -->
+        <div id="tab-graph" class="flex-1 flex flex-col h-full glass-panel rounded-3xl p-6 hidden">
+            <div class="flex justify-between items-center mb-6 pb-4 border-b border-slate-200">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-800">Relationship Graph</h2>
+                    <p class="text-slate-500 font-medium mt-1">Raw JSON topology of Policy Nodes</p>
+                </div>
+                <button onclick="fetchGraph()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600 font-bold flex items-center gap-2 transition">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh
+                </button>
+            </div>
+            <div class="flex-1 overflow-hidden bg-slate-50 rounded-2xl border border-slate-200 p-4">
+                <pre id="graph-json-display" class="h-full overflow-auto text-sm text-slate-700 font-mono">No graph data loaded. Run System Sync first.</pre>
+            </div>
+        </div>
+
+        <!-- Evaluation Tab -->
+        <div id="tab-eval" class="flex-1 flex flex-col h-full glass-panel rounded-3xl p-6 hidden overflow-y-auto">
+            <div class="flex justify-between items-center mb-8 pb-4 border-b border-slate-200">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-800">Evaluation Lab</h2>
+                    <p class="text-slate-500 font-medium mt-1">LLM-as-a-Judge RAG Pipeline Analysis</p>
+                </div>
+                <button onclick="runEvaluation()" class="gradient-btn px-6 py-2 rounded-xl font-bold flex items-center gap-2">
+                    <i data-lucide="play" class="w-4 h-4"></i> Run Suite
+                </button>
+            </div>
+
+            <div id="eval-progress-container" class="glass-card rounded-2xl p-6 mb-8 hidden">
+                <h3 class="text-xl font-bold mb-4 flex items-center gap-2 text-slate-800"><i data-lucide="loader" class="text-teal-500 animate-spin"></i> Live Evaluation Progress</h3>
+                <div class="w-full bg-slate-200 rounded-full h-4 mb-2">
+                    <div id="eval-progress-bar" class="bg-teal-500 h-4 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+                <div class="flex justify-between text-sm font-medium text-slate-500">
+                    <span id="eval-progress-text">Initializing...</span>
+                    <span id="eval-progress-percent">0%</span>
+                </div>
+            </div>
+
+            <div id="eval-metrics" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="glass-card rounded-2xl p-6 text-center">
+                    <h3 class="text-slate-500 font-bold mb-2">No RAG Pass Rate</h3>
+                    <p class="text-5xl font-extrabold text-slate-800" id="m-llm">--%</p>
+                </div>
+                <div class="glass-card rounded-2xl p-6 text-center">
+                    <h3 class="text-slate-500 font-bold mb-2">Naive RAG Pass Rate</h3>
+                    <p class="text-5xl font-extrabold text-slate-800" id="m-naive">--%</p>
+                </div>
+                <div class="glass-card rounded-2xl p-6 text-center border-teal-400" style="box-shadow: 0 4px 20px rgba(16, 185, 129, 0.1);">
+                    <h3 class="text-slate-500 font-bold mb-2">Aware RAG Pass Rate</h3>
+                    <p class="text-5xl font-extrabold gradient-text" id="m-aware">--%</p>
+                </div>
+            </div>
+
+            <div class="glass-card rounded-2xl p-6 mb-8">
+                <h3 class="text-xl font-bold mb-4 flex items-center gap-2 text-slate-800"><i data-lucide="target" class="text-teal-500"></i> Amendment-Trap Performance</h3>
+                <div class="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+                    <div class="text-center">
+                        <p class="text-slate-500 font-bold text-sm mb-1">No RAG</p>
+                        <p class="text-2xl font-extrabold text-slate-800" id="t-llm">--</p>
+                    </div>
+                    <i data-lucide="arrow-right" class="text-slate-400"></i>
+                    <div class="text-center">
+                        <p class="text-slate-500 font-bold text-sm mb-1">Naive RAG</p>
+                        <p class="text-2xl font-extrabold text-slate-800" id="t-naive">--</p>
+                    </div>
+                    <i data-lucide="arrow-right" class="text-slate-400"></i>
+                    <div class="text-center">
+                        <p class="text-slate-500 font-bold text-sm mb-1">Aware RAG</p>
+                        <p class="text-2xl font-extrabold text-teal-600" id="t-aware">--</p>
+                    </div>
+                </div>
+            </div>
+            
+            <button onclick="fetchResults()" class="w-full py-4 border border-slate-200 bg-white rounded-xl hover:bg-slate-50 transition text-slate-600 font-bold flex items-center justify-center gap-2 shadow-sm">
+                <i data-lucide="refresh-cw"></i> Refresh Cached Data
+            </button>
+        </div>
+    </main>
+
+    <script>
+        let sessionUser = null;
+        let sessionRole = 'guest';
+
+        try {
+            lucide.createIcons();
+        } catch(e) { console.warn("Icon load warning:", e); }
+
+        function setAuthTab(tab) {
+            if(tab === 'login') {
+                document.getElementById('form-login').classList.remove('hidden');
+                document.getElementById('form-register').classList.add('hidden');
+                document.getElementById('auth-tab-login').className = 'flex-1 text-sm font-bold text-teal-600 border-b-2 border-teal-500 pb-1';
+                document.getElementById('auth-tab-register').className = 'flex-1 text-sm font-semibold text-slate-400 pb-1';
+            } else {
+                document.getElementById('form-login').classList.add('hidden');
+                document.getElementById('form-register').classList.remove('hidden');
+                document.getElementById('auth-tab-register').className = 'flex-1 text-sm font-bold text-teal-600 border-b-2 border-teal-500 pb-1';
+                document.getElementById('auth-tab-login').className = 'flex-1 text-sm font-semibold text-slate-400 pb-1';
+            }
+        }
+
+        async function handleLogin() {
+            const u = document.getElementById('l-user').value;
+            const p = document.getElementById('l-pass').value;
+            if(!u || !p) return;
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username: u, password: p})
+                });
+                const data = await res.json();
+                if(data.success) {
+                    sessionUser = data.username;
+                    sessionRole = data.role;
+                    updateAuthUI();
+                } else {
+                    alert(data.error);
+                }
+            } catch(e) { alert("Login error: " + e.message); }
+        }
+
+        async function handleRegister() {
+            const u = document.getElementById('r-user').value;
+            const p = document.getElementById('r-pass').value;
+            const a = document.getElementById('r-admin').value;
+            if(!u || !p) return;
+            try {
+                const res = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username: u, password: p, admin_key: a})
+                });
+                
+                if(!res.ok) {
+                    throw new Error(`Server returned ${res.status}`);
+                }
+                
+                const data = await res.json();
+                alert(data.message);
+                if(data.success) setAuthTab('login');
+            } catch(e) { alert("Registration Error: " + e.message); }
+        }
+
+        function handleLogout() {
+            sessionUser = null;
+            sessionRole = 'guest';
+            updateAuthUI();
+            switchTab('chat');
+        }
+
+        function updateAuthUI() {
+            if(sessionUser) {
+                document.getElementById('auth-panel').classList.add('hidden');
+                document.getElementById('profile-panel').classList.remove('hidden');
+                document.getElementById('profile-username').innerText = sessionUser;
+                
+                const roleBadge = document.getElementById('profile-role');
+                roleBadge.innerText = sessionRole.toUpperCase();
+                roleBadge.className = sessionRole === 'admin' 
+                    ? 'px-2 py-0.5 rounded text-xs font-bold bg-purple-100 text-purple-700' 
+                    : 'px-2 py-0.5 rounded text-xs font-bold bg-teal-100 text-teal-700';
+
+                // RBAC for Evaluation Lab
+                if(sessionRole === 'admin') {
+                    document.getElementById('nav-eval').classList.remove('hidden');
+                    document.getElementById('nav-eval').classList.add('flex');
+                    document.getElementById('nav-sync').classList.remove('hidden');
+                    document.getElementById('nav-sync').classList.add('flex');
+                    document.getElementById('nav-graph').classList.remove('hidden');
+                    document.getElementById('nav-graph').classList.add('flex');
+                } else {
+                    document.getElementById('nav-eval').classList.add('hidden');
+                    document.getElementById('nav-eval').classList.remove('flex');
+                    document.getElementById('nav-sync').classList.add('hidden');
+                    document.getElementById('nav-sync').classList.remove('flex');
+                    document.getElementById('nav-graph').classList.add('hidden');
+                    document.getElementById('nav-graph').classList.remove('flex');
+                }
+            } else {
+                document.getElementById('auth-panel').classList.remove('hidden');
+                document.getElementById('profile-panel').classList.add('hidden');
+                document.getElementById('nav-eval').classList.add('hidden');
+                document.getElementById('nav-eval').classList.remove('flex');
+                document.getElementById('nav-sync').classList.add('hidden');
+                document.getElementById('nav-sync').classList.remove('flex');
+                document.getElementById('nav-graph').classList.add('hidden');
+                document.getElementById('nav-graph').classList.remove('flex');
+            }
+        }
+
+        function switchTab(tab) {
+            ['chat', 'eval', 'sync', 'graph'].forEach(t => {
+                document.getElementById(`tab-${t}`).classList.add('hidden');
+                const nav = document.getElementById(`nav-${t}`);
+                if (nav.classList.contains('flex') || t === 'chat') {
+                    nav.className = 'flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:text-teal-700 hover:bg-slate-50 font-semibold transition';
+                }
+            });
+            
+            document.getElementById(`tab-${tab}`).classList.remove('hidden');
+            document.getElementById(`nav-${tab}`).className = 'flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-100 text-teal-700 font-bold shadow-sm transition';
+            
+            if (tab === 'eval') fetchResults();
+            if (tab === 'graph') fetchGraph();
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const query = input.value.trim();
+            if (!query) return;
+
+            input.value = '';
+            
+            const history = document.getElementById('chat-history');
+            
+            // Add user bubble
+            history.innerHTML += `
+                <div class="flex w-full justify-end">
+                    <div class="chat-bubble-user rounded-2xl p-4 max-w-[80%]">
+                        <p class="font-bold mb-1 text-slate-500 flex items-center gap-2 justify-end">User <i data-lucide="user" class="w-4 h-4"></i></p>
+                        <p class="text-slate-800 font-medium">${query}</p>
+                    </div>
+                </div>
+            `;
+            try { lucide.createIcons(); } catch (err) { console.warn(err); }
+            history.scrollTop = history.scrollHeight;
+
+            // Loading indicator
+            const loadingId = 'loading-' + Date.now();
+            history.innerHTML += `
+                <div id="${loadingId}" class="flex w-full justify-start">
+                    <div class="chat-bubble-ai rounded-2xl p-4 flex items-center gap-3">
+                        <div class="w-2 h-2 rounded-full bg-teal-500 animate-bounce"></div>
+                        <div class="w-2 h-2 rounded-full bg-teal-500 animate-bounce" style="animation-delay: 0.1s"></div>
+                        <div class="w-2 h-2 rounded-full bg-teal-500 animate-bounce" style="animation-delay: 0.2s"></div>
+                    </div>
+                </div>
+            `;
+            history.scrollTop = history.scrollHeight;
+
+            try {
+                const isStrict = document.getElementById('strict-mode-toggle') ? document.getElementById('strict-mode-toggle').checked : false;
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({query: query, strict_mode: isStrict})
+                });
+                
+                const rawText = await res.text(); // Read raw text first to catch 500 HTML errors
+                document.getElementById(loadingId).remove();
+                
+                let data;
+                try {
+                    data = JSON.parse(rawText);
+                } catch (e) {
+                    // Backend crashed and returned HTML instead of JSON
+                    history.insertAdjacentHTML('beforeend', `
+                        <div class="flex w-full justify-start mt-4">
+                            <div class="chat-bubble-ai rounded-2xl p-5 max-w-[80%] border-red-500 bg-red-50">
+                                <p class="font-bold text-red-700">API Connection Crash</p>
+                                <p class="text-xs text-red-600 mt-2">The Python backend crashed and did not return JSON. Please restart server.py.</p>
+                            </div>
+                        </div>
+                    `);
+                    history.scrollTop = history.scrollHeight;
+                    return;
+                }
+                
+                if (data.error) {
+                    history.insertAdjacentHTML('beforeend', `
+                        <div class="flex w-full justify-start mt-4">
+                            <div class="chat-bubble-ai rounded-2xl p-5 max-w-[80%] border-red-500 bg-red-50">
+                                <p class="font-bold mb-2 flex items-center gap-2 text-red-700"><i data-lucide="alert-triangle" class="w-5 h-5 text-red-500"></i> Server Error</p>
+                                <p class="text-red-700 font-medium mb-2">${data.error}</p>
+                            </div>
+                        </div>
+                    `);
+                } else {
+                    let sourceHtml = '';
+                    if (data.sources && data.sources.length > 0) {
+                        sourceHtml = '<div class="mt-4 pt-4 border-t border-teal-200"><p class="text-xs text-teal-600 font-bold mb-2 uppercase tracking-wide">Verified Nodes:</p>';
+                        data.sources.forEach(s => {
+                            const statusEmoji = (s.status && s.status.includes('Active')) ? '🟢' : '🔴';
+                            sourceHtml += `<p class="text-xs text-slate-600 mb-1 flex items-center gap-1">${statusEmoji} <code>${s.name}</code></p>`;
+                        });
+                        sourceHtml += '</div>';
+                    }
+
+                    const safeAnswer = data.answer ? data.answer.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, '<br>') : 'No response generated.';
+                    history.insertAdjacentHTML('beforeend', `
+                        <div class="flex w-full justify-start mt-4">
+                            <div class="chat-bubble-ai rounded-2xl p-5 max-w-[80%]">
+                                <p class="font-bold mb-2 flex items-center gap-2 text-teal-700"><i data-lucide="cpu" class="w-5 h-5 text-teal-500"></i> LexPulse AI</p>
+                                <p class="text-slate-700 font-medium mb-2">${safeAnswer}</p>
+                                ${sourceHtml}
+                            </div>
+                        </div>
+                    `);
+                }
+                
+                try { lucide.createIcons(); } catch (err) { console.warn(err); }
+                history.scrollTop = history.scrollHeight;
+            } catch (e) {
+                const loadingEl = document.getElementById(loadingId);
+                if (loadingEl) loadingEl.remove();
+                
+                history.insertAdjacentHTML('beforeend', `
+                    <div class="flex w-full justify-start mt-4">
+                        <div class="chat-bubble-ai rounded-2xl p-5 max-w-[80%] border-orange-500 bg-orange-50">
+                            <p class="font-bold text-orange-700">Network Error</p>
+                            <p class="text-xs text-orange-600 mt-2">${e.message}</p>
+                        </div>
+                    </div>
+                `);
+                history.scrollTop = history.scrollHeight;
+            }
+        }
+
+        async function fetchResults() {
+            try {
+                const res = await fetch('/api/results');
+                const data = await res.json();
+                if (data && data.results && data.results.metrics) {
+                    const m = data.results.metrics;
+                    document.getElementById('m-llm').innerText = m.naive_llm_accuracy.toFixed(1) + '%';
+                    document.getElementById('m-naive').innerText = m.naive_rag_accuracy.toFixed(1) + '%';
+                    document.getElementById('m-aware').innerText = m.aware_accuracy.toFixed(1) + '%';
+                    
+                    document.getElementById('t-llm').innerText = m.tricky_naive_llm_accuracy.toFixed(1) + '%';
+                    document.getElementById('t-naive').innerText = m.tricky_naive_rag_accuracy.toFixed(1) + '%';
+                    document.getElementById('t-aware').innerText = m.tricky_aware_accuracy.toFixed(1) + '%';
+                }
+            } catch (e) {
+                console.log("No data yet or offline.");
+            }
+        }
+
+        let evalPollInterval;
+        async function pollEvalProgress() {
+            try {
+                const res = await fetch('/api/eval_progress');
+                const data = await res.json();
+                
+                if (data.status === 'idle') return;
+                
+                document.getElementById('eval-progress-container').classList.remove('hidden');
+                document.getElementById('eval-progress-bar').style.width = data.percent + '%';
+                document.getElementById('eval-progress-text').innerText = data.message;
+                document.getElementById('eval-progress-percent').innerText = data.percent + '%';
+                
+                if (data.status === 'completed') {
+                    clearInterval(evalPollInterval);
+                    document.getElementById('eval-progress-text').innerText = "Evaluation finished! Updating metrics...";
+                    setTimeout(fetchResults, 1000);
+                    setTimeout(() => {
+                        document.getElementById('eval-progress-container').classList.add('hidden');
+                    }, 5000);
+                } else if (data.status === 'error') {
+                    clearInterval(evalPollInterval);
+                    document.getElementById('eval-progress-text').innerText = "Error: " + data.message;
+                    document.getElementById('eval-progress-bar').classList.replace('bg-teal-500', 'bg-red-500');
+                }
+            } catch(e) {}
+        }
+
+        async function runEvaluation() {
+            if(!confirm("This will launch the genuine 50-question suite in the background. It takes ~15 mins. Proceed?")) return;
+            try {
+                await fetch('/api/evaluate', {method: 'POST'});
+                document.getElementById('eval-progress-container').classList.remove('hidden');
+                document.getElementById('eval-progress-bar').classList.replace('bg-red-500', 'bg-teal-500');
+                if (evalPollInterval) clearInterval(evalPollInterval);
+                evalPollInterval = setInterval(pollEvalProgress, 1000);
+            } catch (e) {
+                alert("Failed to start evaluation.");
+            }
+        }
+        
+        async function runSync() {
+            if(!confirm("This will completely rebuild the vector database and relationship graph. Proceed?")) return;
+            try {
+                await fetch('/api/sync', {method: 'POST'});
+                alert("System Sync started in the background! Check your python console for progress.");
+            } catch (e) {
+                alert("Failed to start sync.");
+            }
+        }
+
+        async function fetchGraph() {
+            try {
+                const res = await fetch('/api/graph');
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('graph-json-display').innerText = JSON.stringify(data, null, 2);
+                } else {
+                    document.getElementById('graph-json-display').innerText = "No graph data found. Ensure System Sync has run.";
+                }
+            } catch (e) {
+                document.getElementById('graph-json-display').innerText = "Error loading graph data.";
+            }
+        }
+        
+        // Initial fetch
+        fetchResults();
+    </script>
+</body>
+</html>

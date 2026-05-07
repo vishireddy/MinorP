@@ -5,7 +5,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from src.retrieval_engine import get_vectorstore, create_relationship_aware_rag_chain
+from src.retrieval_engine import get_vectorstore, create_relationship_aware_rag_chain, create_ablation_chain
+from src.results_manager import save_eval_results, save_ablation_results
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
 from langchain_core.output_parsers import StrOutputParser
@@ -359,7 +360,7 @@ def judge_score(judge_chain, query: str, reference: str, model_answer: str, retr
     """Returns (score 0-10, reason string)"""
     for attempt in range(retries + 1):
         try:
-            raw = judge_chain.invoke({
+            raw = safe_invoke(judge_chain, {
                 "query": query,
                 "reference": reference,
                 "model_answer": model_answer
@@ -377,40 +378,88 @@ def judge_score(judge_chain, query: str, reference: str, model_answer: str, retr
                 time.sleep(2)
     return 0, "Judge failed to evaluate"
 
-
 # ──────────────────────────────────────────────────────────────
 # MODEL CHAINS
 # ──────────────────────────────────────────────────────────────
 def create_naive_llm_chain():
-    """Google Gemma2-9b via Groq — no documents, pure training knowledge."""
-    llm = ChatGroq(model_name="gemma2-9b-it", temperature=0)
+    """
+    Pipeline 1 — No RAG: LLaMA-3.1-8b via Groq. NO documents.
+    Uses the same model as all other pipelines.
+    This pipeline has no access to the policy corpus — it relies solely
+    on the model's training knowledge, which may be outdated for
+    specific Indian legal amendments.
+    """
+    llm = ChatGroq(model_name="llama-3.1-8b-instant", temperature=0)
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a knowledgeable AI assistant. Answer the legal question using your training knowledge. Be specific and cite relevant legal provisions if you know them."),
+        ("system",
+         "You are a knowledgeable AI assistant specialising in Indian law. "
+         "Answer the legal question using your training knowledge. "
+         "Be specific and cite relevant legal provisions if you know them."),
         ("human", "{input}"),
     ])
-    return prompt | llm | StrOutputParser()
+    chain = prompt | llm | StrOutputParser()
+
+    class NoRAGWrapper:
+        def invoke(self, inputs):
+            query = inputs["input"] if isinstance(inputs, dict) else inputs
+            return chain.invoke({"input": query})
+
+    return NoRAGWrapper()
 
 
 def create_naive_rag_chain():
-    """Mistral Mixtral-8x7b via Groq — retrieves docs but ignores amendment relationships."""
-    vectorstore = get_vectorstore()
+    """
+    Pipeline 2 — Naive RAG: LLaMA-3.1-8b via Groq. Same model.
+    Adds basic vector-only retrieval — no BM25 hybrid, no relationship graph.
+    The retriever fetches documents but cannot distinguish between a base
+    act and its superseding amendment, causing amendment blindness.
+    """
+    from src.retrieval_engine import _GLOBAL_VECTORSTORE, get_vectorstore
+    
+    vectorstore = _GLOBAL_VECTORSTORE if _GLOBAL_VECTORSTORE is not None else get_vectorstore()
     retriever = vectorstore.as_retriever(search_kwargs={"k": 8})
-    llm = ChatGroq(model_name="mixtral-8x7b-32768", temperature=0)
+    llm = ChatGroq(model_name="llama-3.1-8b-instant", temperature=0)
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "Answer the question based on the provided context. Treat all documents equally.\n\nContext:\n{context}"),
+        ("system",
+         "You are a knowledgeable AI assistant specialising in Indian law. "
+         "Answer the question based on the provided context. "
+         "Treat all documents equally — do not apply any special logic "
+         "for amendments or superseded laws.\n\nContext:\n{context}"),
         ("human", "{input}"),
     ])
+    chain = prompt | llm | StrOutputParser()
 
-    def format_docs(docs):
-        return "\n\n".join(doc.page_content for doc in docs)
+    class NaiveRAGWrapper:
+        def invoke(self, inputs):
+            query = inputs["input"] if isinstance(inputs, dict) else inputs
+            docs = retriever.invoke(query)
+            context = "\n\n".join(d.page_content for d in docs)
+            return chain.invoke({"context": context, "input": query})
 
-    return (
-        {"context": retriever | format_docs, "input": RunnablePassthrough()}
-        | prompt | llm | StrOutputParser()
-    )
+    return NaiveRAGWrapper()
+
 
 
 # ──────────────────────────────────────────────────────────────
+def safe_invoke(chain, inputs, max_retries=10):
+    """Invokes a chain with exponential backoff for rate limits (429)."""
+    import time
+    for attempt in range(max_retries):
+        try:
+            return chain.invoke(inputs)
+        except Exception as e:
+            err_str = str(e).lower()
+            if "daily" in err_str or "exhausted" in err_str or "insufficient_quota" in err_str:
+                print(f"\nCRITICAL: Daily quota exhausted. Cannot continue.")
+                raise e
+            if "429" in err_str or "rate limit" in err_str or "rate_limit" in err_str:
+                wait_time = 15 * (attempt + 1)
+                print(f"Rate limit hit. Waiting {wait_time}s before retry {attempt+1}/{max_retries}. Error: {str(e)[:100]}")
+                time.sleep(wait_time)
+                if attempt == max_retries - 1:
+                    raise
+            else:
+                raise
 # MAIN EVALUATION RUNNER
 # ──────────────────────────────────────────────────────────────
 def run_evaluation_suite(progress_callback=None):
@@ -441,10 +490,12 @@ def run_evaluation_suite(progress_callback=None):
         category_scores[cat]["total"] += 1
 
         # ── 1. Naive LLM (Google Gemma2-9b, no docs) ──
-        nl_score, nl_reason, nl_ans = 0, "Error", ""
+        nl_score, nl_reason, nl_ans, nl_lat = 0, "Error", "", 0
         try:
-            nl_ans = naive_llm_chain.invoke({"input": test["query"]})
-            time.sleep(1)
+            t0 = time.time()
+            nl_ans = safe_invoke(naive_llm_chain, {"input": test["query"]})
+            nl_lat = round((time.time() - t0) * 1000)
+            time.sleep(2)
             nl_score, nl_reason = judge_score(judge_chain, test["query"], test["reference"], nl_ans)
             naive_llm_total += nl_score
             category_scores[cat]["naive_llm"] += nl_score
@@ -452,13 +503,15 @@ def run_evaluation_suite(progress_callback=None):
                 category_scores[cat]["naive_llm_pass"] += 1
         except Exception as e:
             nl_reason = str(e)
-        time.sleep(1)
+        time.sleep(2)
 
         # ── 2. Naive RAG (Mixtral, no amendment awareness) ──
-        nr_score, nr_reason, nr_ans = 0, "Error", ""
+        nr_score, nr_reason, nr_ans, nr_lat = 0, "Error", "", 0
         try:
-            nr_ans = naive_rag_chain.invoke({"input": test["query"]})
-            time.sleep(1)
+            t0 = time.time()
+            nr_ans = safe_invoke(naive_rag_chain, {"input": test["query"]})
+            nr_lat = round((time.time() - t0) * 1000)
+            time.sleep(2)
             nr_score, nr_reason = judge_score(judge_chain, test["query"], test["reference"], nr_ans)
             naive_rag_total += nr_score
             category_scores[cat]["naive_rag"] += nr_score
@@ -466,14 +519,15 @@ def run_evaluation_suite(progress_callback=None):
                 category_scores[cat]["naive_rag_pass"] += 1
         except Exception as e:
             nr_reason = str(e)
-        time.sleep(1)
+        time.sleep(2)
 
         # ── 3. Relationship-Aware RAG (LLaMA3, full system) ──
-        aw_score, aw_reason, aw_ans = 0, "Error", ""
+        aw_score, aw_reason, aw_ans, aw_lat = 0, "Error", "", 0
         try:
-            aw_resp = aware_chain.invoke({"input": test["query"]})
+            aw_resp = safe_invoke(aware_chain, {"input": test["query"]})
             aw_ans = aw_resp["answer"]
-            time.sleep(1)
+            aw_lat = aw_resp.get("latency_ms", 0)
+            time.sleep(2)
             aw_score, aw_reason = judge_score(judge_chain, test["query"], test["reference"], aw_ans)
             aware_total += aw_score
             category_scores[cat]["aware"] += aw_score
@@ -481,7 +535,7 @@ def run_evaluation_suite(progress_callback=None):
                 category_scores[cat]["aware_pass"] += 1
         except Exception as e:
             aw_reason = str(e)
-        time.sleep(1)
+        time.sleep(2)
 
         results.append({
             "query": test["query"],
@@ -490,11 +544,13 @@ def run_evaluation_suite(progress_callback=None):
             "tricky": test["tricky"],
             "naive_llm_score": nl_score,
             "naive_llm_reason": nl_reason,
+            "naive_llm_latency_ms": nl_lat,
             "naive_rag_score": nr_score,
             "naive_rag_reason": nr_reason,
+            "naive_rag_latency_ms": nr_lat,
             "aware_score": aw_score,
             "aware_reason": aw_reason,
-            # Pass = score >= 6
+            "aware_latency_ms": aw_lat,
             "naive_llm_pass": nl_score >= 6,
             "naive_rag_pass": nr_score >= 6,
             "aware_pass": aw_score >= 6,
@@ -517,24 +573,29 @@ def run_evaluation_suite(progress_callback=None):
     nr_avg = naive_rag_total / total
     aw_avg = aware_total / total
 
+    # Average latencies (ms)
+    nl_lat_avg = round(sum(r.get("naive_llm_latency_ms", 0) for r in results) / total)
+    nr_lat_avg = round(sum(r.get("naive_rag_latency_ms", 0) for r in results) / total)
+    aw_lat_avg = round(sum(r.get("aware_latency_ms", 0) for r in results) / total)
+
     tricky = [r for r in results if r["tricky"]]
     nt = len(tricky)
 
-    return {
+    output = {
         "metrics": {
             "total_queries": total,
-            # Pass rates (score >= 6)
             "naive_llm_accuracy": nl_acc,
             "naive_rag_accuracy": nr_acc,
             "aware_accuracy": aw_acc,
             "rag_improvement_over_llm": aw_acc - nl_acc,
             "rag_improvement_over_naive_rag": aw_acc - nr_acc,
             "hallucination_rate": 100 - aw_acc,
-            # Average judge scores
             "naive_llm_avg_score": nl_avg,
             "naive_rag_avg_score": nr_avg,
             "aware_avg_score": aw_avg,
-            # Tricky / amendment-trap
+            "naive_llm_avg_latency_ms": nl_lat_avg,
+            "naive_rag_avg_latency_ms": nr_lat_avg,
+            "aware_avg_latency_ms": aw_lat_avg,
             "tricky_total": nt,
             "tricky_naive_llm_accuracy": sum(1 for r in tricky if r["naive_llm_pass"]) / nt * 100 if nt else 0,
             "tricky_naive_rag_accuracy": sum(1 for r in tricky if r["naive_rag_pass"]) / nt * 100 if nt else 0,
@@ -543,6 +604,179 @@ def run_evaluation_suite(progress_callback=None):
         "breakdown": results,
         "category_scores": category_scores,
     }
+
+    # Auto-save results for reproducibility
+    save_eval_results(output)
+    return output
+
+
+# ══════════════════════════════════════════════════════════════
+# ABLATION STUDY  (4-Pipeline)
+# ──────────────────────────────────────────────────────────────
+# Progressive component isolation — same judge throughout:
+#   P1) No RAG       (GPT-OSS-120b, no documents)
+#   P2) Naive RAG    (Qwen3-32B,    basic vector retrieval)
+#   P3) Hybrid RAG   (LLaMA3,       BM25+Vector, no graph)
+#   P4) Aware RAG    (LLaMA3,       BM25+Vector + graph)  ← ours
+#
+# Each step adds one component so reviewers can isolate exactly
+# what drives the accuracy gain.
+# ══════════════════════════════════════════════════════════════
+def run_ablation_study(progress_callback=None, n_questions: int = 50):
+    """
+    Full 4-pipeline ablation study over the first n_questions.
+    All four pipelines are scored by the same LLM judge.
+    """
+    if not os.path.exists("data/chroma_db"):
+        raise FileNotFoundError("Vector Database is empty. Run System Sync first.")
+
+    judge_chain    = create_judge_chain()
+    no_rag_chain   = create_naive_llm_chain()        # P1: no documents
+    naive_rag_chain = create_naive_rag_chain()       # P2: basic vector
+    hybrid_chain   = create_ablation_chain()          # P3: BM25+vec, no graph
+    aware_chain    = create_relationship_aware_rag_chain()  # P4: full system
+
+    suite = TEST_SUITE[:n_questions]
+    total = len(suite)
+
+    # accumulators
+    totals  = {"no_rag": 0, "naive_rag": 0, "hybrid": 0, "aware": 0}
+    passes  = {"no_rag": 0, "naive_rag": 0, "hybrid": 0, "aware": 0}
+    tricky_pass = {"no_rag": 0, "naive_rag": 0, "hybrid": 0, "aware": 0}
+    latencies = {"no_rag": [], "naive_rag": [], "hybrid": [], "aware": []}
+    tricky_total = 0
+    results = []
+
+    for i, test in enumerate(suite):
+        if progress_callback:
+            progress_callback(i / total, f"Ablation Q{i+1}/{total}: {test['query'][:48]}...")
+
+        q, ref = test["query"], test["reference"]
+        is_tricky = test.get("tricky", False)
+        if is_tricky:
+            tricky_total += 1
+
+        row = {"query": q, "category": test["category"], "tricky": is_tricky}
+
+        # ── P1: No RAG (Gemma2-9b, pure LLM) ──────────────────
+        try:
+            t0 = time.time()
+            ans = no_rag_chain.invoke({"input": q})
+            lat = round((time.time() - t0) * 1000)
+            latencies["no_rag"].append(lat)
+            time.sleep(1)
+            sc, reason = judge_score(judge_chain, q, ref, ans)
+            totals["no_rag"] += sc
+            if sc >= 6:
+                passes["no_rag"] += 1
+                if is_tricky: tricky_pass["no_rag"] += 1
+            row.update({"no_rag_score": sc, "no_rag_pass": sc >= 6,
+                        "no_rag_reason": reason, "no_rag_latency_ms": lat})
+        except Exception as e:
+            row.update({"no_rag_score": 0, "no_rag_pass": False,
+                        "no_rag_reason": str(e), "no_rag_latency_ms": 0})
+        time.sleep(1)
+
+        # ── P2: Naive RAG (Mixtral, basic vector) ──────────────
+        try:
+            t0 = time.time()
+            ans = naive_rag_chain.invoke({"input": q})
+            lat = round((time.time() - t0) * 1000)
+            latencies["naive_rag"].append(lat)
+            time.sleep(1)
+            sc, reason = judge_score(judge_chain, q, ref, ans)
+            totals["naive_rag"] += sc
+            if sc >= 6:
+                passes["naive_rag"] += 1
+                if is_tricky: tricky_pass["naive_rag"] += 1
+            row.update({"naive_rag_score": sc, "naive_rag_pass": sc >= 6,
+                        "naive_rag_reason": reason, "naive_rag_latency_ms": lat})
+        except Exception as e:
+            row.update({"naive_rag_score": 0, "naive_rag_pass": False,
+                        "naive_rag_reason": str(e), "naive_rag_latency_ms": 0})
+        time.sleep(1)
+
+        # ── P3: Hybrid RAG (LLaMA3, BM25+Vec, no graph) ───────
+        try:
+            resp = hybrid_chain.invoke({"input": q})
+            lat  = resp.get("latency_ms", 0)
+            latencies["hybrid"].append(lat)
+            time.sleep(1)
+            sc, reason = judge_score(judge_chain, q, ref, resp["answer"])
+            totals["hybrid"] += sc
+            if sc >= 6:
+                passes["hybrid"] += 1
+                if is_tricky: tricky_pass["hybrid"] += 1
+            row.update({"hybrid_score": sc, "hybrid_pass": sc >= 6,
+                        "hybrid_reason": reason, "hybrid_latency_ms": lat})
+        except Exception as e:
+            row.update({"hybrid_score": 0, "hybrid_pass": False,
+                        "hybrid_reason": str(e), "hybrid_latency_ms": 0})
+        time.sleep(1)
+
+        # ── P4: Aware RAG (LLaMA3, BM25+Vec + graph) ──────────
+        try:
+            resp = aware_chain.invoke({"input": q})
+            lat  = resp.get("latency_ms", 0)
+            latencies["aware"].append(lat)
+            time.sleep(1)
+            sc, reason = judge_score(judge_chain, q, ref, resp["answer"])
+            totals["aware"] += sc
+            if sc >= 6:
+                passes["aware"] += 1
+                if is_tricky: tricky_pass["aware"] += 1
+            row.update({"aware_score": sc, "aware_pass": sc >= 6,
+                        "aware_reason": reason, "aware_latency_ms": lat})
+        except Exception as e:
+            row.update({"aware_score": 0, "aware_pass": False,
+                        "aware_reason": str(e), "aware_latency_ms": 0})
+        time.sleep(1)
+
+        results.append(row)
+
+    if progress_callback:
+        progress_callback(1.0, "Ablation Complete!")
+
+    def avg_lat(lst): return round(sum(lst) / len(lst)) if lst else 0
+    def pct(n): return round(n / total * 100, 1)
+    def tp(key): return round(tricky_pass[key] / tricky_total * 100, 1) if tricky_total else 0
+
+    output = {
+        "n_questions": total,
+        "metrics": {
+            # Pass rates
+            "no_rag_pass_rate":    pct(passes["no_rag"]),
+            "naive_rag_pass_rate": pct(passes["naive_rag"]),
+            "hybrid_pass_rate":    pct(passes["hybrid"]),
+            "aware_pass_rate":     pct(passes["aware"]),
+            # Avg judge scores
+            "no_rag_avg_score":    round(totals["no_rag"] / total, 2),
+            "naive_rag_avg_score": round(totals["naive_rag"] / total, 2),
+            "hybrid_avg_score":    round(totals["hybrid"] / total, 2),
+            "aware_avg_score":     round(totals["aware"] / total, 2),
+            # Component deltas
+            "retrieval_gain":      pct(passes["naive_rag"]) - pct(passes["no_rag"]),
+            "hybrid_gain":         pct(passes["hybrid"]) - pct(passes["naive_rag"]),
+            "graph_gain":          pct(passes["aware"]) - pct(passes["hybrid"]),
+            "total_gain":          pct(passes["aware"]) - pct(passes["no_rag"]),
+            # Latency
+            "no_rag_avg_latency":    avg_lat(latencies["no_rag"]),
+            "naive_rag_avg_latency": avg_lat(latencies["naive_rag"]),
+            "hybrid_avg_latency":    avg_lat(latencies["hybrid"]),
+            "aware_avg_latency":     avg_lat(latencies["aware"]),
+            # Amendment-trap
+            "tricky_total":          tricky_total,
+            "tricky_no_rag":         tp("no_rag"),
+            "tricky_naive_rag":      tp("naive_rag"),
+            "tricky_hybrid":         tp("hybrid"),
+            "tricky_aware":          tp("aware"),
+        },
+        "breakdown": results,
+    }
+
+    save_ablation_results(output)
+    return output
+
 
 
 # ══════════════════════════════════════════════════════════════
@@ -674,7 +908,7 @@ def run_ragas_evaluation(progress_callback=None, n_questions: int = 20):
     naive_scores = extract(naive_result)
     aware_scores = extract(aware_result)
 
-    return {
+    output = {
         "n_questions": n_questions,
         "naive_rag":   naive_scores,
         "aware_rag":   aware_scores,
@@ -687,6 +921,9 @@ def run_ragas_evaluation(progress_callback=None, n_questions: int = 20):
             "ragas_score":       aware_scores["ragas_score"]      - naive_scores["ragas_score"],
         }
     }
+    from src.results_manager import save_ragas_results
+    save_ragas_results(output)
+    return output
 
 
 if __name__ == "__main__":
@@ -698,14 +935,14 @@ if __name__ == "__main__":
     print(f"{'='*70}")
     print(f"  {'Model':<35} {'Avg Score':>10} {'Pass Rate':>10}")
     print(f"  {'-'*60}")
-    print(f"  {'Gemma2-9b (No Docs)':<35} {m['naive_llm_avg_score']:>9.1f}/10 {m['naive_llm_accuracy']:>9.1f}%")
-    print(f"  {'Mixtral-8x7b (Basic RAG)':<35} {m['naive_rag_avg_score']:>9.1f}/10 {m['naive_rag_accuracy']:>9.1f}%")
+    print(f"  {'GPT-OSS-120b (No Docs)':<35} {m['naive_llm_avg_score']:>9.1f}/10 {m['naive_llm_accuracy']:>9.1f}%")
+    print(f"  {'Qwen3-32B (Basic RAG)':<35} {m['naive_rag_avg_score']:>9.1f}/10 {m['naive_rag_accuracy']:>9.1f}%")
     print(f"  {'LLaMA3 Aware RAG (Ours)':<35} {m['aware_avg_score']:>9.1f}/10 {m['aware_accuracy']:>9.1f}%")
-    print(f"\n  Improvement over Gemma2:    +{m['rag_improvement_over_llm']:.1f}%")
+    print(f"\n  Improvement over GPT-OSS-120b: +{m['rag_improvement_over_llm']:.1f}%")
     print(f"  Improvement over NaiveRAG:  +{m['rag_improvement_over_naive_rag']:.1f}%")
     print(f"\n  Amendment-Trap Questions ({m['tricky_total']} Qs):")
-    print(f"  Gemma2-9b:    {m['tricky_naive_llm_accuracy']:.1f}%")
-    print(f"  Mixtral RAG:  {m['tricky_naive_rag_accuracy']:.1f}%")
+    print(f"  GPT-OSS-120b: {m['tricky_naive_llm_accuracy']:.1f}%")
+    print(f"  Qwen3-32B RAG: {m['tricky_naive_rag_accuracy']:.1f}%")
     print(f"  Aware RAG:    {m['tricky_aware_accuracy']:.1f}%")
 
     res = run_evaluation_suite(lambda p, m: print(f"[{p*100:.0f}%] {m}"))
@@ -716,12 +953,12 @@ if __name__ == "__main__":
     print(f"{'='*70}")
     print(f"  {'Model':<35} {'Avg Score':>10} {'Pass Rate':>10}")
     print(f"  {'-'*60}")
-    print(f"  {'Gemma2-9b (No Docs)':<35} {m['naive_llm_avg_score']:>9.1f}/10 {m['naive_llm_accuracy']:>9.1f}%")
-    print(f"  {'Mixtral-8x7b (Basic RAG)':<35} {m['naive_rag_avg_score']:>9.1f}/10 {m['naive_rag_accuracy']:>9.1f}%")
+    print(f"  {'GPT-OSS-120b (No Docs)':<35} {m['naive_llm_avg_score']:>9.1f}/10 {m['naive_llm_accuracy']:>9.1f}%")
+    print(f"  {'Qwen3-32B (Basic RAG)':<35} {m['naive_rag_avg_score']:>9.1f}/10 {m['naive_rag_accuracy']:>9.1f}%")
     print(f"  {'LLaMA3 Aware RAG (Ours)':<35} {m['aware_avg_score']:>9.1f}/10 {m['aware_accuracy']:>9.1f}%")
-    print(f"\n  Improvement over Gemma2:    +{m['rag_improvement_over_llm']:.1f}%")
+    print(f"\n  Improvement over GPT-OSS-120b: +{m['rag_improvement_over_llm']:.1f}%")
     print(f"  Improvement over NaiveRAG:  +{m['rag_improvement_over_naive_rag']:.1f}%")
     print(f"\n  Amendment-Trap Questions ({m['tricky_total']} Qs):")
-    print(f"  Gemma2-9b:    {m['tricky_naive_llm_accuracy']:.1f}%")
-    print(f"  Mixtral RAG:  {m['tricky_naive_rag_accuracy']:.1f}%")
+    print(f"  GPT-OSS-120b: {m['tricky_naive_llm_accuracy']:.1f}%")
+    print(f"  Qwen3-32B RAG: {m['tricky_naive_rag_accuracy']:.1f}%")
     print(f"  Aware RAG:    {m['tricky_aware_accuracy']:.1f}%")

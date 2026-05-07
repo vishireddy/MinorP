@@ -12,3 +12,5 @@ streamlit-oauth
 requests
 fpdf2
 beautifulsoup4
+matplotlib
+numpy

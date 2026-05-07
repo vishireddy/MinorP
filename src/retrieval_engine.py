@@ -1,4 +1,5 @@
 import os
+import time
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
@@ -8,205 +9,251 @@ from langchain_core.documents import Document
 CHROMA_PATH = "data/chroma_db"
 
 def get_vectorstore(chunks: List[Document] = None):
-    """
-    Initializes or loads the Chroma vector database.
-    If chunks are provided, it adds them to the database.
-    """
-    # Using a free, lightweight open-source embedding model for fast local processing
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    
     if chunks:
         print(f"Creating/Updating ChromaDB with {len(chunks)} chunks at {CHROMA_PATH}...")
         vectorstore = Chroma.from_documents(
-            documents=chunks,
-            embedding=embeddings,
-            persist_directory=CHROMA_PATH
+            documents=chunks, embedding=embeddings, persist_directory=CHROMA_PATH
         )
     else:
-        # Load existing
-        vectorstore = Chroma(
-            persist_directory=CHROMA_PATH,
-            embedding_function=embeddings
-        )
-        
+        vectorstore = Chroma(persist_directory=CHROMA_PATH, embedding_function=embeddings)
     return vectorstore
 
-def create_relationship_aware_rag_chain():
-    """
-    Creates the final RAG chain (Retrieval Augmented Generation).
-    Uses GPT-3.5-turbo to generate answers, and explicitly instructs the LLM
-    to pay attention to relationship metadata tags to prevent amendment blindness.
-    """
-    # Ensure ChromaDB exists before creating the chain
-    if not os.path.exists(CHROMA_PATH):
-        raise FileNotFoundError("ChromaDB not found. Please upload PDFs first.")
 
-    vectorstore = get_vectorstore()
-    # 1. Standard Vector Retriever (Semantic)
-    vector_retriever = vectorstore.as_retriever(
-        search_type="similarity",
-        search_kwargs={
-            "k": 8  # Fetch Top 8 chunks for better recall across large document sets
-        }
-    )
-    
-    # 2. BM25 Lexical Retriever (Keyword)
+def _build_hybrid_retriever(vectorstore):
+    """Builds a Hybrid BM25+Vector RRF retriever from the vectorstore.
+    Uses paginated fetching to avoid SQLite's 'too many SQL variables' limit.
+    """
     from langchain_community.retrievers import BM25Retriever
-    from langchain_core.documents import Document
-    
-    # Extract raw data to initialize BM25 memory space
-    raw_data = vectorstore.get()
-    
-    if raw_data and "documents" in raw_data and raw_data["documents"]:
-        bm25_docs = []
-        for doc_text, meta in zip(raw_data["documents"], raw_data["metadatas"]):
-            bm25_docs.append(Document(page_content=doc_text, metadata=meta))
-            
+    vector_retriever = vectorstore.as_retriever(
+        search_type="similarity", search_kwargs={"k": 8}
+    )
+
+    # Paginate in batches of 200 to stay within SQLite variable limits
+    bm25_docs = []
+    batch_size = 200
+    offset = 0
+    while True:
+        try:
+            batch = vectorstore.get(limit=batch_size, offset=offset,
+                                    include=["documents", "metadatas"])
+        except Exception:
+            break
+        if not batch or not batch.get("documents"):
+            break
+        for t, m in zip(batch["documents"], batch["metadatas"]):
+            bm25_docs.append(Document(page_content=t, metadata=m))
+        if len(batch["documents"]) < batch_size:
+            break
+        offset += batch_size
+
+    if bm25_docs:
         bm25_retriever = BM25Retriever.from_documents(bm25_docs)
         bm25_retriever.k = 8
-        
-        # 3. Create Custom Hybrid Ensemble (Reciprocal Rank Fusion)
+
         class HybridRRFRetriever:
-            def __init__(self, bm25, vector, weight_bm25=0.3, weight_vec=0.7):
+            def __init__(self, bm25, vector, w_bm25=0.3, w_vec=0.7):
                 self.bm25 = bm25
                 self.vector = vector
-                self.w_bm25 = weight_bm25
-                self.w_vec = weight_vec
+                self.w_bm25 = w_bm25
+                self.w_vec = w_vec
 
             def invoke(self, query):
                 docs_bm25 = self.bm25.invoke(query)
                 docs_vec = self.vector.invoke(query)
-                
                 rrf_scores = {}
                 doc_map = {}
-                k = 60 # RRF constant
-                
+                k = 60
                 for rank, d in enumerate(docs_bm25):
                     score = self.w_bm25 * (1.0 / (rank + k))
                     doc_map[d.page_content] = d
                     rrf_scores[d.page_content] = rrf_scores.get(d.page_content, 0.0) + score
-                    
                 for rank, d in enumerate(docs_vec):
                     score = self.w_vec * (1.0 / (rank + k))
                     doc_map[d.page_content] = d
                     rrf_scores[d.page_content] = rrf_scores.get(d.page_content, 0.0) + score
-                    
-                # Sort by highest RRF score
-                top_contents = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
-                return [doc_map[c] for c in top_contents[:8]]
-                
-        retriever = HybridRRFRetriever(bm25_retriever, vector_retriever)
-    else:
-        retriever = vector_retriever
+                top = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
+                return [doc_map[c] for c in top[:8]]
+
+        return HybridRRFRetriever(bm25_retriever, vector_retriever)
+    return vector_retriever
+
+
+def _inject_relationships(docs, vectorstore):
+    """
+    Core relationship injection logic — pulls in amendment docs
+    that the vector search missed (the semantic gap fix).
+    Uses targeted similarity_search to avoid SQLite variable-limit errors.
+    Returns (enriched_docs, graph) tuple.
+    """
+    import json
+    graph_path = "data/relationship_graph.json"
+    graph = {}
+    if not os.path.exists(graph_path):
+        return docs, graph
+    try:
+        with open(graph_path, "r") as f:
+            graph = json.load(f)
+
+        retrieved_files = set(
+            os.path.basename(d.metadata.get("source", "")) for d in docs
+        )
+        injected_docs = []
+
+        for fname in list(retrieved_files):
+            if fname not in graph:
+                continue
+            for amendment_file in graph[fname].get("amended_by", []):
+                if amendment_file in retrieved_files:
+                    continue
+                # Targeted fetch — use similarity_search with metadata filter
+                # instead of vectorstore.get() to avoid SQLite variable limits
+                amendment_stem = amendment_file.replace(".pdf", "").replace("_", " ")
+                try:
+                    candidates = vectorstore.similarity_search(
+                        query=amendment_stem, k=3,
+                        filter={"source": {"$contains": amendment_file}}
+                    )
+                except Exception:
+                    # Fallback: search without filter if $contains unsupported
+                    try:
+                        candidates = vectorstore.similarity_search(
+                            query=amendment_stem, k=5
+                        )
+                        # Keep only chunks whose source matches
+                        candidates = [
+                            d for d in candidates
+                            if amendment_file in d.metadata.get("source", "")
+                        ][:3]
+                    except Exception:
+                        candidates = []
+
+                injected_docs.extend(candidates)
+                retrieved_files.add(amendment_file)
+
+        docs = list(docs) + injected_docs
+    except Exception:
+        pass
+    return docs, graph
+
+
+def _format_context_with_tags(docs, graph):
+    """Adds relationship status tags to each chunk for the LLM."""
+    formatted = []
+    for d in docs:
+        fname = os.path.basename(d.metadata.get("source", "Unknown"))
+        status = graph.get(fname, {}).get("status", "Active")
+        amended_by = graph.get(fname, {}).get("amended_by", [])
+        chunk_str = f"📜 Document: {fname}\n⚠️ RELATIONSHIP STATUS: {status}\n"
+        if amended_by:
+            chunk_str += f"⚠️ SUPERSEDED BY: {', '.join(amended_by)}\n"
+        chunk_str += f"Text:\n{d.page_content}"
+        formatted.append(chunk_str)
+    return "\n\n---\n\n".join(formatted)
+
+
+STRICT_SYSTEM_PROMPT = (
+    "You are a highly advanced E-Governance AI assistant with deep pre-trained knowledge of Indian Law.\n"
+    "STRICT DOCUMENT GROUNDING: You must combine the exact facts from the provided policy context with your extensive "
+    "pre-trained legal reasoning capabilities to formulate a highly accurate, comprehensive, and human-readable answer.\n"
+    "CRITICAL INSTRUCTION: Pay VERY CLOSE ATTENTION to the relationship status of the documents.\n"
+    "If you see a document tagged as 'Inactive/Superseded' and another tagged as 'Active' or 'amends',\n"
+    "you MUST base your factual legal claims strictly on the Active amendment to prevent 'amendment blindness'.\n"
+    "Always cite your sources from the context, providing the exact Document Name.\n"
+    "If the Context is completely empty or irrelevant to the user's query, politely state that the information "
+    "is not present in the active policy database. Do not use internal memory.\n\nContext:\n{context}"
+)
+
+ADAPTIVE_SYSTEM_PROMPT = (
+    "You are a highly advanced E-Governance AI assistant with deep pre-trained knowledge of Indian Law.\n"
+    "ADAPTIVE KNOWLEDGE FUSION: You must answer the user's query with maximum factual accuracy.\n"
+    "Step 1: Read the provided retrieved context. Pay VERY CLOSE ATTENTION to relationship statuses (Active vs Superseded/Amends).\n"
+    "If the context contains sufficient and relevant information to answer the query accurately, base your answer strictly on the context, "
+    "explain policy updates clearly, and append the exact phrase '[Source: Verified Legal Database]' to the very end of your response.\n\n"
+    "Step 2: If the retrieved context is completely empty, fragmented, irrelevant, or insufficient to provide a complete and accurate legal answer, "
+    "you MUST abandon the context and fall back to your extensive internal pre-trained legal knowledge to formulate a highly accurate answer. "
+    "If you use your internal memory, you MUST append the exact phrase '[Source: Internal LLM Memory]' to the very end of your response.\n\n"
+    "Context:\n{context}"
+)
+
+
+_GLOBAL_RETRIEVER = None
+_GLOBAL_VECTORSTORE = None
+
+def create_relationship_aware_rag_chain(strict_mode=False):
+    """Full pipeline: Hybrid retrieval + relationship injection + context tagging."""
+    global _GLOBAL_RETRIEVER, _GLOBAL_VECTORSTORE
     
-    # Requires GROQ_API_KEY in .env
+    if not os.path.exists(CHROMA_PATH):
+        raise FileNotFoundError("ChromaDB not found. Please upload PDFs first.")
+
     from langchain_groq import ChatGroq
+    from langchain_core.output_parsers import StrOutputParser
+
+    if _GLOBAL_VECTORSTORE is None:
+        _GLOBAL_VECTORSTORE = get_vectorstore()
+    vectorstore = _GLOBAL_VECTORSTORE
+    
+    if _GLOBAL_RETRIEVER is None:
+        _GLOBAL_RETRIEVER = _build_hybrid_retriever(vectorstore)
+    retriever = _GLOBAL_RETRIEVER
+
     llm = ChatGroq(model_name="llama-3.1-8b-instant", temperature=0)
-
-    # Prompt explicitly instructs the LLM to use our relationship tracking
-    system_prompt = (
-        "You are a helpful, citizen-facing E-Governance AI assistant.\n"
-        "Use the provided policy context to answer the user's question simply and clearly.\n"
-        "CRITICAL INSTRUCTION: Pay VERY CLOSE ATTENTION to the relationship status of the documents in the context.\n"
-        "If you see a document tagged as 'Inactive/Superseded' and another document tagged as 'Active' or 'amends',\n"
-        "you MUST base your final recommendation on the Active amendment to prevent 'amendment blindness'.\n"
-        "Explain the policy updates to the user (e.g., 'Initially, the rule was X, but it was amended to Y').\n"
-        "Always cite your sources, providing the exact Document Name.\n"
-        "If the Context is completely empty or completely irrelevant to the question, gracefully apologize and state that the information is not present in the Active Policy Database.\n\n"
-        "Context:\n{context}"
-    )
-
+    
+    selected_prompt = STRICT_SYSTEM_PROMPT if strict_mode else ADAPTIVE_SYSTEM_PROMPT
     prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
+        ("system", selected_prompt),
         ("human", "{input}"),
     ])
-    
-    from langchain_core.output_parsers import StrOutputParser
-    from langchain_core.runnables import RunnablePassthrough
-    
-    def format_docs(docs):
-        return "\n\n".join(doc.page_content for doc in docs)
-        
-    simple_chain = (
-        prompt | llm | StrOutputParser()
-    )
-    
-    # We create a simple wrapper class to mimic the output format of RetrievalChain
+    chain = prompt | llm | StrOutputParser()
+
     class RAGWrapper:
         def invoke(self, inputs):
             query = inputs["input"]
-            docs = retriever.invoke(query)
-            
-            # CRITICAL FIX: Langchain often returns immutable tuples. We MUST convert to a mutable list!
-            docs = list(docs)
-            
-            # --- RELATIONSHIP-AWARE CONTEXT INJECTION FLAG ---
-            import json, os
-            graph_path = "data/relationship_graph.json"
-            graph = {}  # Initialize empty graph — avoids NameError if file missing
-            if os.path.exists(graph_path):
-                try:
-                    with open(graph_path, "r") as f:
-                        graph = json.load(f)
-                    
-                    retrieved_files = set([os.path.basename(d.metadata.get("source", "")) for d in docs])
-                    injected_docs = []
-                    
-                    for fname in list(retrieved_files):
-                        if fname in graph and graph[fname].get("amended_by"):
-                            for amendment_file in graph[fname]["amended_by"]:
-                                if amendment_file not in retrieved_files:
-                                    print(f"\n🔗 RELATIONSHIP DETECTED! Forcefully injecting '{amendment_file}' to resolve Semantic Gap...")
-                                    try:
-                                        # Semantic gap means similarity_search might fail to find it even with k=100
-                                        # Absolute paths in Chroma vary, so we extract raw chunks matching the filename directly!
-                                        all_data = vectorstore.get()
-                                        extra_docs = []
-                                        
-                                        if all_data and "metadatas" in all_data:
-                                            for doc_text, meta in zip(all_data["documents"], all_data["metadatas"]):
-                                                if amendment_file in meta.get("source", ""):
-                                                    from langchain_core.documents import Document
-                                                    extra_docs.append(Document(page_content=doc_text, metadata=meta))
-                                                    if len(extra_docs) >= 3: # Pull top 3 chunks of the amendment
-                                                        break
-                                        
-                                        if extra_docs:
-                                            injected_docs.extend(extra_docs)
-                                            retrieved_files.add(amendment_file)
-                                        else:
-                                            print(f"Failed to locate {amendment_file} in raw database.")
-                                    except Exception as e:
-                                        print("Injection failed:", e)
-                                        
-                    if injected_docs:
-                        docs.extend(injected_docs)
-                except Exception as e:
-                    pass
-            # ----------------------------------------------------
-            
-            # Format the documents to explicitly show the LLM which ones are superseded!
-            formatted_chunks = []
-            for d in docs:
-                fname = os.path.basename(d.metadata.get("source", "Unknown"))
-                # Default status to active if not in graph just in case
-                status = graph.get(fname, {}).get("status", "Active") if 'graph' in locals() else "Unknown"
-                
-                chunk_str = f"📜 Document: {fname}\n"
-                chunk_str += f"⚠️ RELATIONSHIP STATUS: {status}\n"
-                
-                # TELL THE LLM WHAT TO LOOK FOR IF SUPERSEDED!
-                amended_by = graph.get(fname, {}).get("amended_by", []) if 'graph' in locals() else []
-                if amended_by:
-                    chunk_str += f"⚠️ SUPERSEDED BY: {', '.join(amended_by)}\n"
-                    
-                chunk_str += f"Text:\n{d.page_content}"
-                formatted_chunks.append(chunk_str)
-                
-            ans = simple_chain.invoke({
-                "context": "\n\n---\n\n".join(formatted_chunks),
-                "input": query
-            })
-            return {"answer": ans, "context": docs}
-            
+            t0 = time.time()
+            docs = list(retriever.invoke(query))
+            docs, graph = _inject_relationships(docs, vectorstore)
+            context = _format_context_with_tags(docs, graph)
+            ans = chain.invoke({"context": context, "input": query})
+            latency_ms = round((time.time() - t0) * 1000)
+            return {"answer": ans, "context": docs, "latency_ms": latency_ms}
+
     return RAGWrapper()
+
+
+def create_ablation_chain():
+    """
+    Ablation pipeline: Hybrid retrieval ONLY — relationship injection DISABLED.
+    Used to isolate and prove the contribution of the relationship graph.
+    """
+    if not os.path.exists(CHROMA_PATH):
+        raise FileNotFoundError("ChromaDB not found. Please run System Sync first.")
+
+    from langchain_groq import ChatGroq
+    from langchain_core.output_parsers import StrOutputParser
+
+    vectorstore = get_vectorstore()
+    retriever = _build_hybrid_retriever(vectorstore)
+    llm = ChatGroq(model_name="llama-3.1-8b-instant", temperature=0)
+
+    ablation_prompt = ChatPromptTemplate.from_messages([
+        ("system",
+         "You are an E-Governance AI assistant. Answer the question based on the provided policy context.\n"
+         "Treat all retrieved documents equally — do not apply any special logic for amendments.\n\n"
+         "Context:\n{context}"),
+        ("human", "{input}"),
+    ])
+    chain = ablation_prompt | llm | StrOutputParser()
+
+    class AblationWrapper:
+        def invoke(self, inputs):
+            query = inputs["input"]
+            t0 = time.time()
+            docs = list(retriever.invoke(query))
+            # NO relationship injection — this is the ablation condition
+            context = "\n\n---\n\n".join(d.page_content for d in docs)
+            ans = chain.invoke({"context": context, "input": query})
+            latency_ms = round((time.time() - t0) * 1000)
+            return {"answer": ans, "context": docs, "latency_ms": latency_ms}
+
+    return AblationWrapper()
