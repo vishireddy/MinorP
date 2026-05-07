@@ -1,10 +1,31 @@
+# Secrets
 .env
+config.yaml
+
+# Python
 .venv/
-.DS_Store
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.egg-info/
+
+# macOS
+.DS_Store
+
+# Logs
 streamlit.log
-.*_cache/
+server_error.log
+*.log
+
+# Large / generated data (too big for GitHub)
 data/chroma_db/
+data/raw/*.pdf
+
+# DB files
 *.sqlite
 *.sqlite3
+
+# Cache
+.*_cache/
+.streamlit/
