@@ -133,7 +133,10 @@ Submitted to: [Conference Name]
 
 ## 👨‍💻 Authors
 
-- Vishwa K Reddy
+- Vishwak Reddy
+- Pranathi Chalamalasetti
+- Perabathini Varshini
+- Pasulavadi Harini
 
 ---
 
