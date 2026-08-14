@@ -40,5 +40,5 @@ autolabel(rects1)
 autolabel(rects2)
 
 plt.tight_layout()
-plt.savefig('data/accuracy_comparison_chart.png', dpi=300, bbox_inches='tight')
+plt.savefig('data/accuracy_comparison_chart.png', dpi=600, bbox_inches='tight')
 print("Graph successfully saved to data/accuracy_comparison_chart.png!")

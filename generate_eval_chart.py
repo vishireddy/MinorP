@@ -82,5 +82,5 @@ ax.legend(handles=[solid, hatched], fontsize=10, framealpha=0.9,
           loc='upper left', edgecolor='#e2e8f0')
 
 plt.tight_layout(pad=1.5)
-plt.savefig('data/lexpulse_eval_comparison.png', dpi=300, bbox_inches='tight')
+plt.savefig('data/lexpulse_eval_comparison.png', dpi=600, bbox_inches='tight')
 print("Chart saved to data/lexpulse_eval_comparison.png")

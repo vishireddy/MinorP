@@ -11,7 +11,7 @@ Standard AI Systems (using Semantic Vector Search) rely entirely on mathematical
 However, the 2019 amendment does not contain those exact phrases—it only contains shorthand section references. Thus, the database completely misses the amendment, and the AI presents the citizen with confidently hallucinated, outdated, and illegal information.
 
 ### The Solution Objective
-This project engineers a **Relationship-Aware Retrieval-Augmented Generation (RAG) framework** that mimics the deductive reasoning of a human paralegal. It actively constructs a topological Knowledge Graph of legal edits, identifies when a retrieved document is obsolete, and forcefully injects the superseding legal texts into the AI's generation pipeline.
+This project engineers a **Relationship-Aware Retrieval-Augmented Generation (RAG) framework** that mimics the deductive reasoning of a human paralegal. It constructs a lightweight JSON-based relationship graph of legal edits, identifies when a retrieved document is obsolete, and injects the superseding legal texts into the AI's generation pipeline.
 
 ---
 
@@ -28,7 +28,7 @@ The project leverages cutting-edge open-source tools to build a fast, scalable, 
 
 ## 3. System Architecture: Module Breakdown
 
-### Module 1: Autonomous Knowledge Graph Generation
+### Module 1: Autonomous Relationship Graph Generation
 Instead of relying on humans to manually compile Excel-sheets tracking which policy amends which, the system manages this autonomously.
 1. **Ingestion:** Raw PDFs are pushed into the `data/raw/` directory.
 2. **Preprocessing:** Using `PyPDFLoader`, the system extracts raw text and chunks it into 500-character segments with 10% overlap to preserve sentence boundaries.
@@ -69,13 +69,13 @@ flowchart LR
         
         C2 --> INTERCEPT[["Python Intercept Wrapper"]]
         
-        INTERCEPT -->|1. Cross-checks| KG[/"Autonomous JSON <br/>Knowledge Graph"/]
+        INTERCEPT -->|1. Cross-checks| KG[/"Autonomous JSON <br/>Relationship Graph"/]
         KG -->|2. Identifies Gap| TAG["amended_by: <br/>amendment_policy.pdf"]
         
         TAG --> FORCE["3. Force Database Injection"]
         FORCE --> C3["Context Package:<br/>1. Base Policy<br/>2. Amendment Policy"]
         
-        C3 --> LLM2{"Groq AI <br/>(Zero-Hallucination Tagged)"}
+        C3 --> LLM2{"Groq AI <br/>(Hallucination-Mitigation Tagged)"}
         LLM2 --> A2["Answer: The law was 5 years, <br/>amended to Central Gov. discretion. <br/>(ACCURATE / LEGAL)"]
     end
 
@@ -85,7 +85,7 @@ flowchart LR
     class A2 success;
 ```
 
-### Module 4: Zero-Hallucination Tagging
+### Module 4: Hallucination-Mitigation Tagging
 Giving the LLM contradictory context ("Document A says 5 years, Document B says government decides") often causes Llama-3 models to hallucinate or guess randomly. To prevent this, our pipeline annotates the raw text with definitive metadata tags before feeding it into the generation prompt:
 ```text
 📜 Document: base_policy.pdf
@@ -97,7 +97,7 @@ Text: [Original 5 year rule]
 ⚠️ RELATIONSHIP STATUS: Active
 Text: [New Government decides rule]
 ```
-By explicitly feeding chronological metadata, the LLM is syntactically forced to prioritize the active document and correctly articulate the timeline of the law changing.
+By explicitly feeding chronological metadata, the LLM is guided to prioritize active documents and describe the timeline of legal changes. This tagging is intended to reduce hallucinations, but it does not guarantee that the LLM will never generate an incorrect statement.
 
 ---
 
@@ -113,6 +113,19 @@ During the final review tests, the system was subjected to a direct comparison a
 **Relationship-Aware System Result:**
 > *"Initially, the term of office was five years, as per the Right to Information Act, 2005 (base_policy.pdf, Section 13). However, this was amended by the Right to Information (Amendment) Act, 2019 (amendment_policy.pdf). According to the amendment, the term of office is now 'such term as may be prescribed by the Central Government'."*
 *(Result: Success. Perfectly extracted the chronology and correctly overrode the original rule).*
+
+### 4.2 Quantitative Performance Metrics
+To scientifically validate the system, we subjected it to a high-difficulty evaluation suite consisting of **51 complex legal queries**, specifically designed to trigger "Amendment Blindness".
+
+| Metric | Naive RAG (Baseline) | Aware RAG (Our System) | Improvement |
+| :--- | :---: | :---: | :---: |
+| **Overall Accuracy** | 54.9% | **70.6%** | **+15.7%** |
+| **Amendment-Trap Pass Rate** | 44.4% | **72.2%** | **+27.8%** |
+| **Avg. Judge Score (/10)** | 4.94 | **6.22** | **+25.9%** |
+
+The results demonstrate that while standard RAG often provides illegal or outdated advice (44.4% pass rate on traps), the Relationship-Aware system identifies the semantic gap and force-injects the correct legal context, significantly outperforming the baseline in both accuracy and answer quality.
+
+---
 
 ## 5. Conclusion
 This project successfully transitions document retrieval from simple 'semantic similarity' to advanced 'logical reasoning'. By combining mathematical dense vectors with deterministic graphical logic, the system effectively mimics a paralegal researching the chronological health of a rule. This architecture demonstrates massive viability for deployment in high-stakes legal, medical, and governmental enterprise environments.

@@ -40,5 +40,5 @@ autolabel(rects1)
 autolabel(rects2)
 
 plt.tight_layout()
-plt.savefig('data/rag_only_comparison_chart.png', dpi=300, bbox_inches='tight')
+plt.savefig('data/rag_only_comparison_chart.png', dpi=600, bbox_inches='tight')
 print("Graph successfully saved to data/rag_only_comparison_chart.png!")

@@ -98,6 +98,16 @@ div[data-testid="stMetricLabel"] {
     color: #1e293b !important;
     font-weight: 600 !important;
 }
+
+/* Google Translate Styling */
+.goog-te-gadget-simple {
+    border: none !important;
+    background: transparent !important;
+    font-family: 'Inter', sans-serif !important;
+}
+.goog-te-gadget-icon {
+    display: none !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -158,6 +168,24 @@ with st.sidebar:
     
     st.markdown("### ⚙️ Engine Settings")
     st.session_state['strict_mode'] = st.toggle("Strict RAG Mode (No LLM Fallback)", value=False, help="When ON, the AI will refuse to answer if the context is missing. When OFF, it falls back to internal knowledge.")
+
+# ==========================================
+# 2. MAIN HEADER
+# ==========================================
+import streamlit.components.v1 as components
+components.html("""
+    <div id="google_translate_element"></div>
+    <script type="text/javascript">
+        function googleTranslateElementInit() {
+            new google.translate.TranslateElement({pageLanguage: 'en', layout: google.translate.TranslateElement.InlineLayout.SIMPLE}, 'google_translate_element');
+        }
+    </script>
+    <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+    <style>
+        body { margin: 0; padding: 0; font-family: sans-serif; }
+        .goog-te-gadget-simple { border: 1px solid #e2e8f0 !important; border-radius: 4px !important; padding: 5px !important; }
+    </style>
+""", height=50)
 
 st.markdown("""
 <div style="background-color: white; padding: 25px; border-radius: 8px; margin-bottom: 25px; border-left: 5px solid #1E3A8A; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
